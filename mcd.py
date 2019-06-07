@@ -8,7 +8,7 @@ import getopt
 #import numpy as np
 
 MASTER = "192.168.1.200"
-              
+
 def runLocalCommandOut(com):
     p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE)
     print "\t"+com, "->\n", p1.communicate()[0].strip()
@@ -23,12 +23,12 @@ def runLocalCommand(com):
 def runRemoteCommand(com):
     p1 = Popen(["ssh", MASTER, com], stdout=PIPE)        
 
-def runMutilate(com, dirr, i):
+def runMutilate(com, dirr, i, rxu):
     p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE)
     output = p1.communicate()[0].strip().split('\n')
     ll = list(filter(None, output[1].strip().split(' ')))
-    f = open(dirr+"/"+str(i)+".log", "w")
-    f.write(str(ll[8]))
+    f = open(dirr+"/"+str(rxu)+"_"+str(i)+".log", "w")
+    f.write(str(ll[8])+"\n")
     f.close()
     
 def main(argv):
@@ -50,24 +50,27 @@ def main(argv):
         if opt in ('-g'):    
             goal = int(arg)
     today = datetime.now()
-
+    
     dirr=str(today.month)+"_"+str(today.day)+"_"+str(today.year)+"_"+str(today.hour)+"_"+str(today.minute)+"_"+str(today.second)
     print(dirr, rxu, rxq, txq, niters, goal)
 
     runLocalCommandOut("mkdir -p "+dirr)
-
-    for i in range(1, niters+1):
-        runRemoteCommandOut("pkill memcached")
-        runLocalCommandOut("pkill mutilate")
+    
+    for delay in range(0, 420, 7):    
+        runRemoteCommandOut("ethtool -C enp4s0f1 rx-usecs "+str(delay))
         time.sleep(1)
-        runRemoteCommand("taskset -c 1 memcached -u nobody -t 1 -m 8G -l "+MASTER+" -B binary")
-        time.sleep(1)
-        runLocalCommandOut("taskset -c 1 mutilate --binary -s "+MASTER+" --loadonly -K fb_key -V fb_value")
-        time.sleep(1)
-        runLocalCommand("taskset -c 2-15 mutilate -A --affinity -T 14")
-        time.sleep(1)
-        runMutilate("taskset -c 1 mutilate --binary --noload -B -s "+MASTER+" -a localhost -K fb_key -V fb_value -i fb_ia -u 0.25 -c 8 -d 4 -C 8 -Q 1000 -t 10 -q "+str(goal), dirr, i)
-        time.sleep(1)
+        for i in range(1, niters+1):
+            runRemoteCommandOut("pkill memcached")
+            runLocalCommandOut("pkill mutilate")
+            time.sleep(1)
+            runRemoteCommand("taskset -c 1 memcached -u nobody -t 1 -m 8G -l "+MASTER+" -B binary")
+            time.sleep(1)
+            runLocalCommandOut("taskset -c 1 mutilate --binary -s "+MASTER+" --loadonly -K fb_key -V fb_value")
+            time.sleep(1)
+            runLocalCommand("taskset -c 2-15 mutilate -A --affinity -T 14")
+            time.sleep(1)
+            runMutilate("taskset -c 1 mutilate --binary --noload -B -s "+MASTER+" -a localhost -K fb_key -V fb_value -i fb_ia -u 0.25 -c 8 -d 4 -C 8 -Q 1000 -t 10 -q "+str(goal), dirr, i, delay)
+            time.sleep(1)
     
 if __name__ == '__main__':
     main(sys.argv[1:])
