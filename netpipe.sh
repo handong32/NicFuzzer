@@ -3,6 +3,12 @@
 export DEBUG=${DEBUG:=}
 export PROC=${PROC:=1}
 export COUNT=${COUNT:=5}
+export RXU=${RXU:='10'}
+export RXQ=${RXQ:='512'}
+export TXQ=${TXQ:='512'}
+export MSGS=${MSGS:='1024'}
+export NITERS=${NITERS:=10}
+
 export SERVER=${SERVER:=192.168.1.200}
 currdate=`date +%m_%d_%Y_%H_%M_%S`
 if [[ -n $DEBUG ]]; then set -x; fi
@@ -14,21 +20,18 @@ function run
     #qiter='128 256 512 1024 2048 3072 4096 5120 6144 7168'
     #rxusec='10 30 50 70 90 110 130 150'
     #rxusec='10 15 20'
-    rxusec='5'
     #qiter='128 512 1024 2048 4096 6144'
-    qiter='512'
     #uu='3072 4099 7567'
-    uu='3072'
     printf "NETPIPE TESTS\n"
 
-    for u in $uu;
+    for u in $MSGS;
     do
-	for rxu in $rxusec;
+	for rxu in $RXU;
 	do
 	    ssh $SERVER "ethtool -C enp4s0f1 rx-usecs $rxu"
-	    for rxq in $qiter;
+	    for rxq in $RXQ;
 	    do
-		for txq in $qiter;
+		for txq in $TXQ;
 		do
 		    printf "CONFIG: RX-RING:%d TX-RING:%d RXU:%d\n" $rxq $txq $rxu
 		    ssh $SERVER "ethtool -G enp4s0f1 rx $rxq tx $txq"
@@ -63,10 +66,11 @@ function run
 }
 
 function gather() {
+    echo $currdate
     mkdir -p $currdate
-    for iter in `seq 1 1 100`;
+    for iter in `seq 1 1 $NITERS`;
     do	
-	#echo run "run"$iter "tmp"
+	#echo "run" $iter $currdate
 	run $iter $currdate
     done
 }
@@ -155,7 +159,10 @@ if [ "$1" = "run2" ]; then
     $1 $2 $3 $4 $5 $6 $7
 elif [ "$1" = "gather_linux_default" ]; then
     $1
-else
+elif [ "$1" = "gather" ]; then
+    echo "Running" $1 "Iters="$NITERS "RXU="$RXU "RXQ="$RXQ "TXQ="$TXQ "NITERS="$NITERS "MSGS="$MSGS
     $1
+else
+    echo "unknown command"
 fi
 
