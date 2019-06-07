@@ -14,17 +14,12 @@ function run
     #qiter='128 256 512 1024 2048 3072 4096 5120 6144 7168'
     #rxusec='10 30 50 70 90 110 130 150'
     #rxusec='10 15 20'
-    rxusec='43'
+    rxusec='5'
     #qiter='128 512 1024 2048 4096 6144'
-    qiter='128'
+    qiter='512'
     #uu='3072 4099 7567'
     uu='3072'
     printf "NETPIPE TESTS\n"
-
-    for rxu in $rxusec;
-    do
-	mkdir -p $2"/rxu"$rxu/$1
-    done
 
     for u in $uu;
     do
@@ -54,7 +49,8 @@ function run
 			output1=$(ssh $SERVER "taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
 			sleep 2
 			taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n 1000 -p 0 -r -I
-			cp np.out $2"/rxu"$rxu/$1/netpipe_$rxq\_$txq\_$u.log 
+			#cp np.out $2"/rxu"$rxu/$1/netpipe_$rxq\_$txq\_$u.log 
+			cp np.out $2"/np_"$u\_$rxu\_$rxq\_$txq\_$1.log
 			sleep 1
 		    else
 			echo "CONFIG FAILED"
@@ -67,10 +63,11 @@ function run
 }
 
 function gather() {
+    mkdir -p $currdate
     for iter in `seq 1 1 100`;
     do	
 	#echo run "run"$iter "tmp"
-	run "run"$iter "linux_default"
+	run $iter $currdate
     done
 }
 
@@ -78,7 +75,7 @@ function gather_linux_default() {
     mkdir -p gather_linux_default/$currdate
     uu='3072'
     
-    for iter in `seq 1 1 1`;
+    for iter in `seq 1 1 100`;
     do
 	for u in $uu;
 	do
