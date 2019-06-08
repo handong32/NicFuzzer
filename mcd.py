@@ -56,7 +56,7 @@ def main(argv):
 
     runLocalCommandOut("mkdir -p "+dirr)
     
-    for delay in range(0, 420, 7):    
+    for delay in range(0, 300, 15):    
         runRemoteCommandOut("ethtool -C enp4s0f1 rx-usecs "+str(delay))
         time.sleep(1)
         for i in range(1, niters+1):
@@ -69,7 +69,7 @@ def main(argv):
             time.sleep(1)
             runLocalCommand("taskset -c 2-15 mutilate -A --affinity -T 14")
             time.sleep(1)
-            runMutilate("taskset -c 1 mutilate --binary --noload -B -s "+MASTER+" -a localhost -K fb_key -V fb_value -i fb_ia -u 0.25 -c 8 -d 4 -C 8 -Q 1000 -t 10 -q "+str(goal), dirr, i, delay)
+            runMutilate("taskset -c 1 mutilate --binary --noload -B -s "+MASTER+" -a localhost -K fb_key -V fb_value -i fb_ia -u 0.25 -c 8 -d 4 -C 8 -Q 1000 -t 30 -q "+str(goal), dirr, i, delay)
             time.sleep(1)
     
 if __name__ == '__main__':
