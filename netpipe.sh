@@ -53,7 +53,7 @@ function run
 			sleep 2
 			taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n 1000 -p 0 -r -I
 			#cp np.out $2"/rxu"$rxu/$1/netpipe_$rxq\_$txq\_$u.log 
-			cp np.out $2"/np_"$u\_$rxu\_$rxq\_$txq\_$1.log
+			cp np.out "netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".log"
 			sleep 1
 		    else
 			echo "CONFIG FAILED"
@@ -67,7 +67,6 @@ function run
 
 function gather() {
     echo $currdate
-    mkdir -p $currdate
     for iter in `seq 1 1 $NITERS`;
     do	
 	#echo "run" $iter $currdate
@@ -76,6 +75,7 @@ function gather() {
 }
 
 function gather_linux_default() {
+    echo $currdate
     mkdir -p gather_linux_default/$currdate
     uu='3072'
     
@@ -160,7 +160,9 @@ if [ "$1" = "run2" ]; then
 elif [ "$1" = "gather_linux_default" ]; then
     $1
 elif [ "$1" = "gather" ]; then
-    echo "Running" $1 "Iters="$NITERS "RXU="$RXU "RXQ="$RXQ "TXQ="$TXQ "NITERS="$NITERS "MSGS="$MSGS
+    mkdir -p "netpipe_data/$currdate"
+    echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS"
+    echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS" > "netpipe_data/$currdate/command.txt"
     $1
 else
     echo "unknown command"
