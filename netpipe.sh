@@ -8,8 +8,11 @@ export RXQ=${RXQ:='512'}
 export TXQ=${TXQ:='512'}
 export MSGS=${MSGS:='1024'}
 export NITERS=${NITERS:=10}
+export NPITER=${NPITER:=1000}
+export OUTFILE=${OUTFILE:=0}
 
 export SERVER=${SERVER:=192.168.1.200}
+
 currdate=`date +%m_%d_%Y_%H_%M_%S`
 if [[ -n $DEBUG ]]; then set -x; fi
 
@@ -51,9 +54,57 @@ function run
 			pkill NPtcp
 			output1=$(ssh $SERVER "taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
 			sleep 2
-			taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n 1000 -p 0 -r -I
+			taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n $NPITER -p 0 -r -I
 			#cp np.out $2"/rxu"$rxu/$1/netpipe_$rxq\_$txq\_$u.log 
 			cp np.out "netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".log"
+			sleep 1
+		    else
+			echo "CONFIG FAILED"
+			echo " "
+		    fi	        
+		done
+	    done
+	done
+    done    
+}
+
+function runPerf
+{
+    success=0
+    printf "NETPIPE TESTS\n"
+
+    for u in $MSGS;
+    do
+	for rxu in $RXU;
+	do
+	    ssh $SERVER "ethtool -C enp4s0f1 rx-usecs $rxu"
+	    for rxq in $RXQ;
+	    do
+		for txq in $TXQ;
+		do
+		    printf "CONFIG: RX-RING:%d TX-RING:%d RXU:%d\n" $rxq $txq $rxu
+		    ssh $SERVER "ethtool -G enp4s0f1 rx $rxq tx $txq"
+		    success=0
+		    for testiter in `seq 0 1 $COUNT`;
+		    do
+			sleep 1
+			output=$(ping -c 3 192.168.1.200 | grep "3 received")
+			if [ ${#output} -ge 1 ]; then
+			    success=1
+			    break
+			fi
+		    done
+		    
+		    if [ $success -eq 1 ]; then
+			ssh $SERVER pkill NPtcp
+			pkill NPtcp
+			#perf stat -a -e cycles,instructions,cache-misses,cache-references,power/energy-cores/,power/energy-pkg/,power/energy-ram/ -I 100 -x , taskset -c 1 NPtcp -l 3072 -u 3072 -p 0 -r -I
+			output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -e power/energy-pkg/ -x , taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
+			sleep 1
+			taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n $NPITER -p 0 -r -I
+			if [ $OUTFILE -eq 1 ]; then
+			    cp np.out "netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".log"
+			fi
 			sleep 1
 		    else
 			echo "CONFIG FAILED"
@@ -74,14 +125,21 @@ function gather() {
     done
 }
 
+function gatherPerf() {
+    echo $currdate
+    for iter in `seq 1 1 $NITERS`;
+    do	
+	runPerf $iter $currdate
+    done
+}
+
 function gather_linux_default() {
     echo $currdate
     mkdir -p gather_linux_default/$currdate
-    uu='3072'
     
-    for iter in `seq 1 1 100`;
+    for iter in `seq 1 1 $NITERS`;
     do
-	for u in $uu;
+	for u in $MSGS;
 	do
 	    success=0
 	    for testiter in `seq 0 1 $COUNT`;
@@ -99,7 +157,7 @@ function gather_linux_default() {
 		pkill NPtcp
 		output1=$(ssh $SERVER "taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
 		sleep 2
-		taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n 1000 -p 0 -r -I
+		taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n $NPITER -p 0 -r -I
 		cp np.out gather_linux_default/$currdate/$u\_$iter.log 
 		sleep 1
 	    else
@@ -163,6 +221,14 @@ elif [ "$1" = "gather" ]; then
     mkdir -p "netpipe_data/$currdate"
     echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS"
     echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS" > "netpipe_data/$currdate/command.txt"
+    $1
+elif [ "$1" = "gatherPerf" ]; then
+    echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS"
+
+    if [ $OUTFILE -eq 1 ]; then
+	mkdir -p "netpipe_data/$currdate"
+	echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS" > "netpipe_data/$currdate/command.txt"
+    fi
     $1
 else
     echo "unknown command"
