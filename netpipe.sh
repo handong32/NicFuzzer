@@ -12,6 +12,7 @@ export MSGU=${MSGU:='2024'}
 export NITERS=${NITERS:=10}
 export NPITER=${NPITER:=1000}
 export OUTFILE=${OUTFILE:=0}
+export DORAND=${DORAND:=0}
 
 export SERVER=${SERVER:=192.168.1.200}
 
@@ -218,9 +219,17 @@ function gather_linux_default() {
 	    if [ $success -eq 1 ]; then
 		ssh $SERVER pkill NPtcp
 		pkill NPtcp
-		output1=$(ssh $SERVER "taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
-		sleep 2
-		taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n $NPITER -p 0 -r -I
+
+		if [ $DORAND -eq 1 ]; then
+		    output1=$(ssh $SERVER "taskset -c 1 NPtcp -l $MSGL -u $MSGU -p 0 -r -I -x") &
+		    sleep 2
+		    taskset -c 1 NPtcp -h $SERVER -l $MSGL -u $MSGU -n $NPITER -p 0 -r -I -x
+		else
+		    output1=$(ssh $SERVER "taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
+		    sleep 2
+		    taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n $NPITER -p 0 -r -I
+		fi
+		
 		if [ $OUTFILE -eq 1 ]; then
 		    cp np.out gather_linux_default/$currdate/$u\_$iter.log
 		fi
