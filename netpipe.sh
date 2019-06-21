@@ -99,11 +99,16 @@ function runPerf
 			ssh $SERVER pkill NPtcp
 			pkill NPtcp
 			#perf stat -a -e cycles,instructions,cache-misses,cache-references,power/energy-cores/,power/energy-pkg/,power/energy-ram/ -I 100 -x , taskset -c 1 NPtcp -l 3072 -u 3072 -p 0 -r -I
-			output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -e power/energy-pkg/ -x , taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
+			if [ $OUTFILE -eq 1 ]; then
+				output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,cache-misses,page-faults,power/energy-pkg/,power/energy-cores/,power/energy-ram/,syscalls:sys_enter_read,syscalls:sys_enter_write,'net:*' -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
+			else
+				output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -e cycles,instructions,cache-misses,page-faults,power/energy-pkg/,power/energy-cores/,power/energy-ram/,syscalls:sys_enter_read,syscalls:sys_enter_write,'net:*' -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
+			fi
 			sleep 1
 			taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n $NPITER -p 0 -r -I
 			if [ $OUTFILE -eq 1 ]; then
 			    cp np.out "netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".log"
+			    scp $SERVER:~/perf.out "netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".perf"
 			fi
 			sleep 1
 		    else
