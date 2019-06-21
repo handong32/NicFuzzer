@@ -292,25 +292,27 @@ if [ "$1" = "run2" ]; then
 elif [ "$1" = "gather_linux_default" ]; then
     $1
 elif [ "$1" = "gather" ]; then
-    echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS"
+    echo "Running $1 Iters=$NITERS NPITER=$NPITER RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS"
+    
     if [ $OUTFILE -eq 1 ]; then
 	mkdir -p "netpipe_data/$currdate"
-	echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS" > "netpipe_data/$currdate/command.txt"
+	echo "Running $1 Iters=$NITERS NPITER=$NPITER RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS" > "netpipe_data/$currdate/command.txt"
     fi
     $1
 elif [ "$1" = "gatherPerf" ]; then
-    echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS"
+    echo "Running $1 Iters=$NITERS NPITER=$NPITER RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS"
 
     if [ $OUTFILE -eq 1 ]; then
 	mkdir -p "netpipe_data/$currdate"
-	echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS" > "netpipe_data/$currdate/command.txt"
+	echo "Running $1 Iters=$NITERS NPITER=$NPITER RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS" > "netpipe_data/$currdate/command.txt"
     fi
     $1
 elif [ "$1" = "gatherRand" ]; then
-    echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGL=$MSGL MSGU=$MSGU"
+    echo "Running $1 Iters=$NITERS NPITER=$NPITER RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGL=$MSGL MSGU=$MSGU"
+
     if [ $OUTFILE -eq 1 ]; then
 	mkdir -p "netpipe_data/$currdate"
-	echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGL=$MSGL MSGU=$MSGU" > "netpipe_data/$currdate/command.txt"
+	echo "Running $1 Iters=$NITERS NPITER=$NPITER RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGL=$MSGL MSGU=$MSGU" > "netpipe_data/$currdate/command.txt"
     fi
     $1
 else
