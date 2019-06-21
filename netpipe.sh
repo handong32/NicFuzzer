@@ -7,6 +7,8 @@ export RXU=${RXU:='10'}
 export RXQ=${RXQ:='512'}
 export TXQ=${TXQ:='512'}
 export MSGS=${MSGS:='1024'}
+export MSGL=${MSGL:='1024'}
+export MSGU=${MSGU:='2024'}
 export NITERS=${NITERS:=10}
 export NPITER=${NPITER:=1000}
 export OUTFILE=${OUTFILE:=0}
@@ -55,8 +57,9 @@ function run
 			output1=$(ssh $SERVER "taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
 			sleep 2
 			taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n $NPITER -p 0 -r -I
-			#cp np.out $2"/rxu"$rxu/$1/netpipe_$rxq\_$txq\_$u.log 
-			cp np.out "netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".log"
+			if [ $OUTFILE -eq 1 ]; then
+			    cp np.out "netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".log"
+			fi
 			sleep 1
 		    else
 			echo "CONFIG FAILED"
@@ -121,6 +124,49 @@ function runPerf
     done    
 }
 
+function runRand {
+    success=0
+    printf "NETPIPE TESTS\n"
+
+    for rxu in $RXU;
+    do
+	ssh $SERVER "ethtool -C enp4s0f1 rx-usecs $rxu"
+	for rxq in $RXQ;
+	do
+	    for txq in $TXQ;
+	    do
+		printf "CONFIG: RX-RING:%d TX-RING:%d RXU:%d\n" $rxq $txq $rxu
+		ssh $SERVER "ethtool -G enp4s0f1 rx $rxq tx $txq"
+		success=0
+		for testiter in `seq 0 1 $COUNT`;
+		do
+		    sleep 1
+		    output=$(ping -c 3 192.168.1.200 | grep "3 received")
+		    if [ ${#output} -ge 1 ]; then
+			success=1
+			break
+		    fi
+		done
+
+		if [ $success -eq 1 ]; then
+		    ssh $SERVER pkill NPtcp
+		    pkill NPtcp
+		    output1=$(ssh $SERVER "taskset -c 1 NPtcp -l $MSGL -u $MSGU -p 0 -r -I -x") &
+		    sleep 2
+		    taskset -c 1 NPtcp -h $SERVER -l $MSGL -u $MSGU -n $NPITER -p 0 -r -I -x
+		    if [ $OUTFILE -eq 1 ]; then
+			cp np.out "netpipe_data/$2/np_"$MSGL\_$MSGU\_$rxu\_$rxq\_$txq\_$1".log"
+		    fi
+		    sleep 1
+		else
+		    echo "CONFIG FAILED"
+		    echo " "
+		fi
+	    done
+	done
+    done
+}
+
 function gather() {
     echo $currdate
     for iter in `seq 1 1 $NITERS`;
@@ -138,9 +184,21 @@ function gatherPerf() {
     done
 }
 
+function gatherRand() {
+    echo $currdate
+    for iter in `seq 1 1 $NITERS`;
+    do	
+	runRand $iter $currdate
+    done
+}    
+
+
 function gather_linux_default() {
     echo $currdate
-    mkdir -p gather_linux_default/$currdate
+    
+    if [ $OUTFILE -eq 1 ]; then
+    	mkdir -p gather_linux_default/$currdate
+    fi
     
     for iter in `seq 1 1 $NITERS`;
     do
@@ -163,7 +221,9 @@ function gather_linux_default() {
 		output1=$(ssh $SERVER "taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
 		sleep 2
 		taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n $NPITER -p 0 -r -I
-		cp np.out gather_linux_default/$currdate/$u\_$iter.log 
+		if [ $OUTFILE -eq 1 ]; then
+		    cp np.out gather_linux_default/$currdate/$u\_$iter.log
+		fi
 		sleep 1
 	    else
 		echo "CONFIG FAILED"
@@ -223,9 +283,11 @@ if [ "$1" = "run2" ]; then
 elif [ "$1" = "gather_linux_default" ]; then
     $1
 elif [ "$1" = "gather" ]; then
-    mkdir -p "netpipe_data/$currdate"
     echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS"
-    echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS" > "netpipe_data/$currdate/command.txt"
+    if [ $OUTFILE -eq 1 ]; then
+	mkdir -p "netpipe_data/$currdate"
+	echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS" > "netpipe_data/$currdate/command.txt"
+    fi
     $1
 elif [ "$1" = "gatherPerf" ]; then
     echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS"
@@ -233,6 +295,13 @@ elif [ "$1" = "gatherPerf" ]; then
     if [ $OUTFILE -eq 1 ]; then
 	mkdir -p "netpipe_data/$currdate"
 	echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS" > "netpipe_data/$currdate/command.txt"
+    fi
+    $1
+elif [ "$1" = "gatherRand" ]; then
+    echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGL=$MSGL MSGU=$MSGU"
+    if [ $OUTFILE -eq 1 ]; then
+	mkdir -p "netpipe_data/$currdate"
+	echo "Running $1 Iters=$NITERS RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGL=$MSGL MSGU=$MSGU" > "netpipe_data/$currdate/command.txt"
     fi
     $1
 else
