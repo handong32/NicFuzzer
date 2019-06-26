@@ -104,9 +104,11 @@ function runPerf
 			pkill NPtcp
 			#perf stat -a -e cycles,instructions,cache-misses,cache-references,power/energy-cores/,power/energy-pkg/,power/energy-ram/ -I 100 -x , taskset -c 1 NPtcp -l 3072 -u 3072 -p 0 -r -I
 			if [ $OUTFILE -eq 1 ]; then
-				output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,cache-misses,page-faults,power/energy-pkg/,power/energy-cores/,power/energy-ram/,syscalls:sys_enter_read,syscalls:sys_enter_write,'net:*' -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
+			    #output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,cache-misses,page-faults,power/energy-pkg/,power/energy-cores/,power/energy-ram/,syscalls:sys_enter_read,syscalls:sys_enter_write,'net:*' -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
+			    output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -o perf.out -e power/energy-pkg/,power/energy-ram/ -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
 			else
-				output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -e cycles,instructions,cache-misses,page-faults,power/energy-pkg/,power/energy-cores/,power/energy-ram/,syscalls:sys_enter_read,syscalls:sys_enter_write,'net:*' -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
+			    output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -e power/energy-pkg/,power/energy-ram/ -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
+			    #output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -e cycles,instructions,cache-misses,page-faults,power/energy-pkg/,power/energy-cores/,power/energy-ram/,syscalls:sys_enter_read,syscalls:sys_enter_write,'net:*' -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
 			fi
 			sleep 1
 			taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n $NPITER -p 0 -r -I
@@ -283,8 +285,7 @@ function run2() {
     else
 	echo "CONFIG FAILED"
 	echo " "
-    fi
-    
+    fi    
 }
 
 if [ "$1" = "run2" ]; then
@@ -292,27 +293,27 @@ if [ "$1" = "run2" ]; then
 elif [ "$1" = "gather_linux_default" ]; then
     $1
 elif [ "$1" = "gather" ]; then
-    echo "Running $1 Iters=$NITERS NPITER=$NPITER RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS"
+    echo "Running $1 RXU=$RXU NPITER=$NPITER RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS"
     
     if [ $OUTFILE -eq 1 ]; then
 	mkdir -p "netpipe_data/$currdate"
-	echo "Running $1 Iters=$NITERS NPITER=$NPITER RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS" > "netpipe_data/$currdate/command.txt"
+	echo "Running $1 RXU=$RXU NPITER=$NPITER RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS" > "netpipe_data/$currdate/command.txt"
     fi
     $1
 elif [ "$1" = "gatherPerf" ]; then
-    echo "Running $1 Iters=$NITERS NPITER=$NPITER RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS"
+    echo "Running $1 RXU=$RXU NPITER=$NPITER RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS"
 
     if [ $OUTFILE -eq 1 ]; then
 	mkdir -p "netpipe_data/$currdate"
-	echo "Running $1 Iters=$NITERS NPITER=$NPITER RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS" > "netpipe_data/$currdate/command.txt"
+	echo "Running $1 RXU=$RXU NPITER=$NPITER RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS" > "netpipe_data/$currdate/command.txt"
     fi
     $1
 elif [ "$1" = "gatherRand" ]; then
-    echo "Running $1 Iters=$NITERS NPITER=$NPITER RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGL=$MSGL MSGU=$MSGU"
+    echo "Running $1 RXU=$RXU NPITER=$NPITER RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGL=$MSGL MSGU=$MSGU"
 
     if [ $OUTFILE -eq 1 ]; then
 	mkdir -p "netpipe_data/$currdate"
-	echo "Running $1 Iters=$NITERS NPITER=$NPITER RXU=$RXU RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGL=$MSGL MSGU=$MSGU" > "netpipe_data/$currdate/command.txt"
+	echo "Running $1 RXU=$RXU NPITER=$NPITER RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGL=$MSGL MSGU=$MSGU" > "netpipe_data/$currdate/command.txt"
     fi
     $1
 else
