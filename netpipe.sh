@@ -102,20 +102,59 @@ function runPerf
 		    if [ $success -eq 1 ]; then
 			ssh $SERVER pkill NPtcp
 			pkill NPtcp
-			#perf stat -a -e cycles,instructions,cache-misses,cache-references,power/energy-cores/,power/energy-pkg/,power/energy-ram/ -I 100 -x , taskset -c 1 NPtcp -l 3072 -u 3072 -p 0 -r -I
 			if [ $OUTFILE -eq 1 ]; then
 			    #output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,cache-misses,page-faults,power/energy-pkg/,power/energy-cores/,power/energy-ram/,syscalls:sys_enter_read,syscalls:sys_enter_write,'net:*' -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
-			    output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -o perf.out -e power/energy-pkg/,power/energy-ram/ -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
+			    output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,cache-misses,power/energy-pkg/,power/energy-ram/,'power:*' -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
 			else
-			    output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -e power/energy-pkg/,power/energy-ram/ -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
-			    #output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -e cycles,instructions,cache-misses,page-faults,power/energy-pkg/,power/energy-cores/,power/energy-ram/,syscalls:sys_enter_read,syscalls:sys_enter_write,'net:*' -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
+			    output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,cache-misses,power/energy-pkg/,power/energy-ram/,'power:*' -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
 			fi
 			sleep 1
+			intrstart=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-1" | tr -s ' ' | cut -d ' ' -f 4 )
 			taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n $NPITER -p 0 -r -I
+			intrend=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-1" | tr -s ' ' | cut -d ' ' -f 4 )
+			intrtot=$((intrend-intrstart))
+			ncycles=$(ssh $SERVER cat perf.out | grep cycles | cut -d ',' -f1)
+			ninstructions=$(ssh $SERVER cat perf.out | grep instructions | cut -d ',' -f1)
+		        ncachemiss=$(ssh $SERVER cat perf.out | grep "cache-misses" | cut -d ',' -f1)
+			energypkg=$(ssh $SERVER cat perf.out | grep energy-pkg | cut -d ',' -f1)
+			energyram=$(ssh $SERVER cat perf.out | grep energy-ram | cut -d ',' -f1)
+		        ncpuidle=$(ssh $SERVER cat perf.out | grep "cpu_idle" | cut -d ',' -f1)
+		        ncpufreq=$(ssh $SERVER cat perf.out | grep "cpu_frequency" | cut -d ',' -f1)
+
+			totaltime=$(cat np.out | tr -s ' ' | cut -d ' ' -f 5)
+			tput=$(cat np.out | tr -s ' ' | cut -d ' ' -f 3)
+
+			#echo "$u $tput" | awk '{printf "min_time %.2f usec, time %.2f usec, ratio %.2f\n", ($1*8)/10000.0, ($1*8)/$2, (($1*8)/10000.0)/ (($1*8)/$2)}'
+			### 1 Mbps == 1 bit per usec
+			### 10 Gbps == 10,000 bits per usec
+			
+			echo "$ncycles" | awk '{printf "num_cycles %.2f KK\n", ($1/1000000.0)}'
+			echo "$ninstructions" | awk '{printf "num_instructions %.2f KK\n", ($1/1000000.0)}'
+			echo "$ncachemiss" | awk '{printf "num_cache_misses %.2f KK\n", ($1/1000000.0)}'
+			echo "$energypkg $totaltime" | awk '{printf "RAPL_PKG_Power %.2f Watts\n", $1/$2}'
+			echo "$energyram $totaltime" | awk '{printf "RAPL_DRAM_Power %.2f Watts\n", $1/$2}'
+			echo "$energypkg $energyram $totaltime" | awk '{printf "Total_Power %.2f Watts\n", ($1+$2)/$3}'
+			echo "$ncpuidle" | awk '{printf "power:cpu_idle %.2f K\n", $1/1000.0}'
+			echo "$ncpufreq" | awk '{printf "power:cpu_frequency %.2f K\n", $1/1000.0}'
+			echo "$intrtot" | awk '{printf "num_interrupts %.2f K\n", $1/1000.0}'
+			
 			if [ $OUTFILE -eq 1 ]; then
-			    cp np.out "netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".log"
-			    scp $SERVER:~/perf.out "netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".perf"
-			fi
+			    file="netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".log" 
+			    cp np.out $file
+			    #scp $SERVER:~/perf.out "netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".perf" 
+			    echo "$ncycles" | awk '{printf "num_cycles %.2f KK\n", ($1/1000000.0)}' >> $file
+			    echo "$ninstructions" | awk '{printf "num_instructions %.2f KK\n", ($1/1000000.0)}' >> $file
+			    echo "$ncachemiss" | awk '{printf "num_cache_misses %.2f KK\n", ($1/1000000.0)}' >> $file
+			    echo "$energypkg $totaltime" | awk '{printf "RAPL_PKG_Power %.2f Watts\n", $1/$2}' >> $file
+			    echo "$energyram $totaltime" | awk '{printf "RAPL_DRAM_Power %.2f Watts\n", $1/$2}' >> $file
+			    echo "$energypkg $energyram $totaltime" | awk '{printf "Total_Power %.2f Watts\n", ($1+$2)/$3}' >> $file
+			    
+			    echo "$ncpuidle" | awk '{printf "power:cpu_idle %.2f K\n", $1/1000.0}' >> $file
+			    echo "$ncpufreq" | awk '{printf "power:cpu_frequency %.2f K\n", $1/1000.0}' >> $file
+			    echo "$intrtot" | awk '{printf "num_interrupts %.2f K\n", $1/1000.0}' >> $file
+			    echo "$totaltime" | awk '{printf "total_time %.2f s\n", $1}' >> $file
+			    echo "$tput" | awk '{printf "throughput %.2f Mbps\n", $1}' >> $file
+		   	fi
 			sleep 1
 		    else
 			echo "CONFIG FAILED"
