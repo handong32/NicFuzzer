@@ -283,6 +283,23 @@ function gather_linux_default() {
     done
 }
 
+function gather_linux_default2() {
+    echo $currdate
+    
+#    touch gather_linux_default/default2.ref
+    
+    for u in `seq 90000 1 666666`;
+    do
+	echo $u
+	ssh $SERVER pkill NPtcp
+	pkill NPtcp
+	output1=$(ssh $SERVER "taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
+	sleep 1
+	taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n 100 -p 0 -r -I
+	cat np.out >> gather_linux_default/default.ref
+    done
+}
+
 function run2() {
     success=0
     rxu=$1
@@ -329,7 +346,7 @@ function run2() {
 
 if [ "$1" = "run2" ]; then
     $1 $2 $3 $4 $5 $6 $7
-elif [ "$1" = "gather_linux_default" ]; then
+elif [ "$1" = "gather_linux_default2" ]; then
     $1
 elif [ "$1" = "gather" ]; then
     echo "Running $1 RXU=$RXU NPITER=$NPITER RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS"
