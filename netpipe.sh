@@ -22,12 +22,6 @@ if [[ -n $DEBUG ]]; then set -x; fi
 function run
 {
     success=0
-    #qiter='128 256 512 1024 1152 1280 1536 2048 2176 2304 2560 3072 3200 3328 3584 4096'
-    #qiter='128 256 512 1024 2048 3072 4096 5120 6144 7168'
-    #rxusec='10 30 50 70 90 110 130 150'
-    #rxusec='10 15 20'
-    #qiter='128 512 1024 2048 4096 6144'
-    #uu='3072 4099 7567'
     printf "NETPIPE TESTS\n"
 
     for u in $MSGS;
@@ -40,23 +34,24 @@ function run
 		for txq in $TXQ;
 		do
 		    printf "CONFIG: RX-RING:%d TX-RING:%d RXU:%d\n" $rxq $txq $rxu
-		    ssh $SERVER "ethtool -G enp4s0f1 rx $rxq tx $txq"
-		    success=0
-		    for testiter in `seq 0 1 $COUNT`;
-		    do
-			sleep 1
-			output=$(ping -c 3 192.168.1.200 | grep "3 received")
-			if [ ${#output} -ge 1 ]; then
-			    success=1
-			    break
-			fi
-		    done
+#		    ssh $SERVER "ethtool -G enp4s0f1 rx $rxq tx $txq"
+		    success=1
+#		    for testiter in `seq 0 1 $COUNT`;
+#		    do
+#			sleep 1
+#			output=$(ping -c 3 192.168.1.200 | grep "3 received")
+#			if [ ${#output} -ge 1 ]; then
+#			    success=1
+#			    break
+#			fi
+#		    done
 		    
 		    if [ $success -eq 1 ]; then
 			ssh $SERVER pkill NPtcp
 			pkill NPtcp
+			sleep 1
 			output1=$(ssh $SERVER "taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
-			sleep 2
+			sleep 1
 			taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n $NPITER -p 0 -r -I
 			if [ $OUTFILE -eq 1 ]; then
 			    cp np.out "netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".log"
@@ -106,37 +101,34 @@ function runPerf
 			    #output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,cache-misses,page-faults,power/energy-pkg/,power/energy-cores/,power/energy-ram/,syscalls:sys_enter_read,syscalls:sys_enter_write,'net:*' -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
 			    output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,cache-misses,power/energy-pkg/,power/energy-ram/,'power:*' -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
 			else
-			    output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,cache-misses,power/energy-pkg/,power/energy-ram/,'power:*' -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
+			    output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/,'power:*' -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
 			fi
 			sleep 1
 			intrstart=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-1" | tr -s ' ' | cut -d ' ' -f 4 )
 			taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n $NPITER -p 0 -r -I
 			intrend=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-1" | tr -s ' ' | cut -d ' ' -f 4 )
 			intrtot=$((intrend-intrstart))
-			ncycles=$(ssh $SERVER cat perf.out | grep cycles | cut -d ',' -f1)
-			ninstructions=$(ssh $SERVER cat perf.out | grep instructions | cut -d ',' -f1)
+			ncycles=$(ssh $SERVER cat perf.out | grep "cycles" | cut -d ',' -f1)
+			ninstructions=$(ssh $SERVER cat perf.out | grep "instructions" | cut -d ',' -f1)
 		        ncachemiss=$(ssh $SERVER cat perf.out | grep "cache-misses" | cut -d ',' -f1)
-			energypkg=$(ssh $SERVER cat perf.out | grep energy-pkg | cut -d ',' -f1)
-			energyram=$(ssh $SERVER cat perf.out | grep energy-ram | cut -d ',' -f1)
+			energypkg=$(ssh $SERVER cat perf.out | grep "energy-pkg" | cut -d ',' -f1)
+			energyram=$(ssh $SERVER cat perf.out | grep "energy-ram" | cut -d ',' -f1)
 		        ncpuidle=$(ssh $SERVER cat perf.out | grep "cpu_idle" | cut -d ',' -f1)
 		        ncpufreq=$(ssh $SERVER cat perf.out | grep "cpu_frequency" | cut -d ',' -f1)
 
 			totaltime=$(cat np.out | tr -s ' ' | cut -d ' ' -f 5)
 			tput=$(cat np.out | tr -s ' ' | cut -d ' ' -f 3)
 
-			#echo "$u $tput" | awk '{printf "min_time %.2f usec, time %.2f usec, ratio %.2f\n", ($1*8)/10000.0, ($1*8)/$2, (($1*8)/10000.0)/ (($1*8)/$2)}'
-			### 1 Mbps == 1 bit per usec
-			### 10 Gbps == 10,000 bits per usec
-			
-			echo "$ncycles" | awk '{printf "num_cycles %.2f KK\n", ($1/1000000.0)}'
-			echo "$ninstructions" | awk '{printf "num_instructions %.2f KK\n", ($1/1000000.0)}'
-			echo "$ncachemiss" | awk '{printf "num_cache_misses %.2f KK\n", ($1/1000000.0)}'
+			#echo "$u $tput" | awk '{printf "min_time %.2f usec, time %.2f usec, ratio %.2f\n", ($1*8)/10000.0, ($1*8)/$2, (($1*8)/10000.0)/ (($1*8)/$2)}'			
+			echo "$ncycles" | awk '{printf "num_cycles %.2f\n", $1}'
+			echo "$ninstructions" | awk '{printf "num_instructions %.2f\n", $1}'
+			echo "$ncachemiss" | awk '{printf "num_cache_misses %.2f\n", $1}'
 			echo "$energypkg $totaltime" | awk '{printf "RAPL_PKG_Power %.2f Watts\n", $1/$2}'
 			echo "$energyram $totaltime" | awk '{printf "RAPL_DRAM_Power %.2f Watts\n", $1/$2}'
 			echo "$energypkg $energyram $totaltime" | awk '{printf "Total_Power %.2f Watts\n", ($1+$2)/$3}'
-			echo "$ncpuidle" | awk '{printf "power:cpu_idle %.2f K\n", $1/1000.0}'
-			echo "$ncpufreq" | awk '{printf "power:cpu_frequency %.2f K\n", $1/1000.0}'
-			echo "$intrtot" | awk '{printf "num_interrupts %.2f K\n", $1/1000.0}'
+			echo "$ncpuidle" | awk '{printf "power:cpu_idle %.2f\n", $1}'
+			echo "$ncpufreq" | awk '{printf "power:cpu_frequency %.2f\n", $1}'
+			echo "$intrtot" | awk '{printf "num_interrupts %.2f\n", $1}'
 			
 			if [ $OUTFILE -eq 1 ]; then
 			    file="netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".log" 
@@ -234,6 +226,15 @@ function gatherRand() {
     done
 }    
 
+function reinforce() {
+   for iter in `seq 1 1 $NITERS`;
+   do	
+       python3 -u reinforce_netpipe.py
+       sleep 5
+       ssh $SERVER pkill NPtcp
+       pkill NPtcp
+   done
+}
 
 function gather_linux_default() {
     echo $currdate
@@ -371,6 +372,8 @@ elif [ "$1" = "gatherRand" ]; then
 	mkdir -p "netpipe_data/$currdate"
 	echo "Running $1 RXU=$RXU NPITER=$NPITER RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGL=$MSGL MSGU=$MSGU" > "netpipe_data/$currdate/command.txt"
     fi
+    $1
+elif [ "$1" = "reinforce" ]; then
     $1
 else
     echo "unknown command"
