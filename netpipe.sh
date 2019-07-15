@@ -76,7 +76,6 @@ function runPerf
     for u in $MSGS;
     do
 	for rxu in $RXU;
-	#for rxu in `seq 0 2 80`;
 	do
 	    ssh $SERVER "ethtool -C enp4s0f1 rx-usecs $rxu"
 	    for rxq in $RXQ;

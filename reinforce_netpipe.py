@@ -171,7 +171,7 @@ def mainLinuxCompare():
 def main():
     total_msg_sz = 0
     total_time = 0
-    threshold = 200000
+    threshold = 1000000
     while total_msg_sz < threshold:
         msg_size = random.randint(1, 100000)
         if msg_size + total_msg_sz > threshold:
@@ -187,25 +187,39 @@ def main():
         total_time += float(time_taken)
         print('msg_size=%s rx_delay=%s time_taken=%.6f' % (smsg_size, rx_delay, time_taken))
 
-    reward = (threshold/1000000.0)/total_time
+    reward = ((threshold*8)/1000000.0)/total_time
     print("reward = %.2f mbps" % (reward))
     finish_episode2(reward)
-    print("\t Saving model to reinforce.pt")
-    torch.save(policy.state_dict(), "./reinforce.pt")
+    print("\t Saving model to reinforce_one_reward.pt")
+    torch.save(policy.state_dict(), "./reinforce_one_reward.pt")
+
+def run():
+    print("Loading model reinforce.pt")
+    policy.load_state_dict(torch.load("./reinforce_one_reward.pt"))
+    policy.eval()
     
 if __name__ == '__main__':
-#    print("Loading model reinforce.pt")
-#    policy.load_state_dict(torch.load("./reinforce.pt"))
+    for i in range(0, 81, 2):
+        print(i, end=' ', flush=True)
+ 
+   # policy.load_state_dict(torch.load("./reinforce.pt"))
+#    policy.load_state_dict(torch.load("./reinforce_one_reward.pt"))
     #policy.eval()
+#    for i in range(1, 200000):
+#        state = []
+#        state.append(i)
+#        action = select_action(np.array(state))
+#        msg_size = str(state[0])
+#        rx_delay = str(int(action))
+#        print("%s,%s" % (msg_size, rx_delay))
+        #print(rx_delay,"us ", msg_size, "bytes ")
+        
 #    mainLinuxCompare()
-    main()
+    #main()
 #    print("Saving model to reinforce.pt")
 #    torch.save(policy.state_dict(), "./reinforce.pt")
             
 '''    
-    print("Loading model reinforce.pt")
-    policy.load_state_dict(torch.load("./reinforce.pt"))
-    policy.eval()
     for i in range(1, 250000):
         state = []
         state.append(i)
