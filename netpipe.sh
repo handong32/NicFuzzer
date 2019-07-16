@@ -112,30 +112,30 @@ function runPerf
 			intrend=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-1" | tr -s ' ' | cut -d ' ' -f 4 )
 			intrtot=$((intrend-intrstart))
 			
-			ncycles=$(ssh $SERVER cat perf.out | grep "cycles" | cut -d ',' -f1)
-			ninstructions=$(ssh $SERVER cat perf.out | grep "instructions" | cut -d ',' -f1)
+			#ncycles=$(ssh $SERVER cat perf.out | grep "cycles" | cut -d ',' -f1)
+			#ninstructions=$(ssh $SERVER cat perf.out | grep "instructions" | cut -d ',' -f1)
 		        #ncachemiss=$(ssh $SERVER cat perf.out | grep "cache-misses" | cut -d ',' -f1)
-			nllclmiss=$(ssh $SERVER cat perf.out | grep "LLC-load-misses" | cut -d ',' -f1)
-			nllcsmiss=$(ssh $SERVER cat perf.out | grep "LLC-store-misses" | cut -d ',' -f1)
-			energypkg=$(ssh $SERVER cat perf.out | grep "energy-pkg" | cut -d ',' -f1)
-			energyram=$(ssh $SERVER cat perf.out | grep "energy-ram" | cut -d ',' -f1)
+			#nllclmiss=$(ssh $SERVER cat perf.out | grep "LLC-load-misses" | cut -d ',' -f1)
+			#nllcsmiss=$(ssh $SERVER cat perf.out | grep "LLC-store-misses" | cut -d ',' -f1)
+			#energypkg=$(ssh $SERVER cat perf.out | grep "energy-pkg" | cut -d ',' -f1)
+			#energyram=$(ssh $SERVER cat perf.out | grep "energy-ram" | cut -d ',' -f1)
 		        #ncpuidle=$(ssh $SERVER cat perf.out | grep "cpu_idle" | cut -d ',' -f1)
 		        #ncpufreq=$(ssh $SERVER cat perf.out | grep "cpu_frequency" | cut -d ',' -f1)
-			totaltime=$(cat np.out | tr -s ' ' | cut -d ' ' -f 5)
-			tput=$(cat np.out | tr -s ' ' | cut -d ' ' -f 3)
+			#totaltime=$(cat np.out | tr -s ' ' | cut -d ' ' -f 5)
+			#tput=$(cat np.out | tr -s ' ' | cut -d ' ' -f 3)
 			
 			#echo "$u $tput" | awk '{printf "min_time %.2f usec, time %.2f usec, ratio %.2f\n", ($1*8)/10000.0, ($1*8)/$2, (($1*8)/10000.0)/ (($1*8)/$2)}'
-			echo "$tput" | awk '{printf "throughput %.2f\n", $1}'
-			echo "$ncycles" | awk '{printf "num_cycles %d\n", $1}'
-			echo "$ninstructions" | awk '{printf "num_instructions %d\n", $1}'
-			echo "$nllclmiss" | awk '{printf "LLC-load-misses %d\n", $1}'
-			echo "$nllcsmiss" | awk '{printf "LLC-store-misses %d\n", $1}'
-			echo "$nllclmiss $nllcsmiss" | awk '{printf "LLC_misses %d\n", $1+$2}'
-			echo "$nllclmiss $nllcsmiss $totaltime" | awk '{printf "Memory_Bandwidth %.2f MBps\n", ((($1+$2)*64)/1000000.0)/$3}'
-			echo "$energypkg $totaltime" | awk '{printf "RAPL_PKG_Power %.2f Watts\n", $1/$2}'
-			echo "$energyram $totaltime" | awk '{printf "RAPL_DRAM_Power %.2f Watts\n", $1/$2}'
-			echo "$intrtot" | awk '{printf "num_interrupts %d\n", $1}'
-			echo "$energypkg $energyram $totaltime" | awk '{printf "Total_Power %.2f Watts\n", ($1+$2)/$3}'
+			#echo "$tput" | awk '{printf "throughput %.2f\n", $1}'
+			#echo "$ncycles" | awk '{printf "num_cycles %d\n", $1}'
+			#echo "$ninstructions" | awk '{printf "num_instructions %d\n", $1}'
+			#echo "$nllclmiss" | awk '{printf "LLC-load-misses %d\n", $1}'
+			#echo "$nllcsmiss" | awk '{printf "LLC-store-misses %d\n", $1}'
+			#echo "$nllclmiss $nllcsmiss" | awk '{printf "LLC_misses %d\n", $1+$2}'
+			#echo "$nllclmiss $nllcsmiss $totaltime" | awk '{printf "Memory_Bandwidth %.2f MBps\n", ((($1+$2)*64)/1000000.0)/$3}'
+			#echo "$energypkg $totaltime" | awk '{printf "RAPL_PKG_Power %.2f Watts\n", $1/$2}'
+			#echo "$energyram $totaltime" | awk '{printf "RAPL_DRAM_Power %.2f Watts\n", $1/$2}'
+			#echo "$intrtot" | awk '{printf "num_interrupts %d\n", $1}'
+			#echo "$energypkg $energyram $totaltime" | awk '{printf "Total_Power %.2f Watts\n", ($1+$2)/$3}'
 			#echo "$ncpuidle" | awk '{printf "power:cpu_idle %.2f\n", $1}'
 			#echo "$ncpufreq" | awk '{printf "power:cpu_frequency %.2f\n", $1}'
 			
@@ -143,18 +143,19 @@ function runPerf
 			if [ $OUTFILE -eq 1 ]; then
 			    file="netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".log" 
 			    cp np.out $file
-			    #scp $SERVER:~/perf.out "netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".perf"
-			    echo "$tput" | awk '{printf "throughput %.2f\n", $1}' >> $file
-			    echo "$ncycles" | awk '{printf "num_cycles %d\n", $1}' >> $file
-			    echo "$ninstructions" | awk '{printf "num_instructions %d\n", $1}' >> $file
-			    echo "$nllclmiss" | awk '{printf "LLC-load-misses %d\n", $1}' >> $file
-			    echo "$nllcsmiss" | awk '{printf "LLC-store-misses %d\n", $1}' >> $file
-			    echo "$nllclmiss $nllcsmiss" | awk '{printf "LLC_misses %d\n", $1+$2}' >> $file
-			    echo "$nllclmiss $nllcsmiss $totaltime" | awk '{printf "Memory_Bandwidth %.2f MBps\n", ((($1+$2)*64)/1000000.0)/$3}' >> $file
-			    echo "$energypkg $totaltime" | awk '{printf "RAPL_PKG_Power %.2f Watts\n", $1/$2}' >> $file
-			    echo "$energyram $totaltime" | awk '{printf "RAPL_DRAM_Power %.2f Watts\n", $1/$2}' >> $file
-			    echo "$energypkg $energyram $totaltime" | awk '{printf "Total_Power %.2f Watts\n", ($1+$2)/$3}' >> $file
-			    echo "$intrtot" | awk '{printf "num_interrupts %d\n", $1}' >> $file
+			    scp $SERVER:~/perf.out "netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".perf"
+			    echo "num_interrupt "$intrtot >> "netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".perf"
+			    #echo "$tput" | awk '{printf "throughput %.2f\n", $1}' >> $file
+			    #echo "$ncycles" | awk '{printf "num_cycles %d\n", $1}' >> $file
+			    #echo "$ninstructions" | awk '{printf "num_instructions %d\n", $1}' >> $file
+			    #echo "$nllclmiss" | awk '{printf "LLC-load-misses %d\n", $1}' >> $file
+			    #echo "$nllcsmiss" | awk '{printf "LLC-store-misses %d\n", $1}' >> $file
+			    #echo "$nllclmiss $nllcsmiss" | awk '{printf "LLC_misses %d\n", $1+$2}' >> $file
+			    #echo "$nllclmiss $nllcsmiss $totaltime" | awk '{printf "Memory_Bandwidth %.2f MBps\n", ((($1+$2)*64)/1000000.0)/$3}' >> $file
+			    #echo "$energypkg $totaltime" | awk '{printf "RAPL_PKG_Power %.2f Watts\n", $1/$2}' >> $file
+			    #echo "$energyram $totaltime" | awk '{printf "RAPL_DRAM_Power %.2f Watts\n", $1/$2}' >> $file
+			    #echo "$energypkg $energyram $totaltime" | awk '{printf "Total_Power %.2f Watts\n", ($1+$2)/$3}' >> $file
+			    #echo "$intrtot" | awk '{printf "num_interrupts %d\n", $1}' >> $file
 			fi
 			sleep 1
 		    else
