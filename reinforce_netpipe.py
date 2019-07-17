@@ -19,14 +19,18 @@ import random
 from datetime import datetime
 import pickle
 
-parser = argparse.ArgumentParser(description='PyTorch REINFORCE netpipe example')
-parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
-                    help='discount factor (default: 0.99)')
-parser.add_argument('--render', action='store_true',
-                    help='render the environment')
-parser.add_argument('--log-interval', type=int, default=10, metavar='N',
-                    help='interval between training status logs (default: 10)')
-args = parser.parse_args()
+#parser = argparse.ArgumentParser(description='PyTorch REINFORCE netpipe example')
+#parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
+#                    help='discount factor (default: 0.99)')
+#parser.add_argument('--render', action='store_true',
+#                    help='render the environment')
+#parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+#                    help='interval between training status logs (default: 10)')
+#parser.add_argument('--ttype', type=int, default=0, metavar='N',
+#                    help='type')
+
+gamma = 0.99
+#args = parser.parse_args()
 timenow = datetime.now()
 torch.manual_seed(timenow.second)
 random.seed(timenow.second)
@@ -40,7 +44,7 @@ class Policy(nn.Module):
         # 1 message size IN, 100 interrupt delays out
         self.affine1 = nn.Linear(1, 128)
         self.dropout = nn.Dropout(p=0.6)
-        self.affine2 = nn.Linear(128, 120)
+        self.affine2 = nn.Linear(128, 80)
 
         self.saved_log_probs = []
         self.rewards = []
@@ -69,7 +73,7 @@ def finish_episode():
     policy_loss = []
     returns = []
     for r in policy.rewards[::-1]:
-        R = r + args.gamma * R
+        R = r + gamma * R
         returns.insert(0, R)
     returns = torch.tensor(returns)
     returns = (returns - returns.mean()) / (returns.std() + eps)
@@ -78,7 +82,7 @@ def finish_episode():
     optimizer.zero_grad()
     policy_loss = torch.cat(policy_loss).sum()
     policy_loss.backward()
-    print("policy_loss", policy_loss)
+    #print("policy_loss", policy_loss)
     optimizer.step()
     del policy.rewards[:]
     del policy.saved_log_probs[:]
@@ -108,7 +112,7 @@ def runLocalCommandOut(com):
     p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE)
     print("\t"+com, "->\n", p1.communicate()[0].strip())
 
-def runNetPipe(com):
+def runNetPipe(com, t):
     p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE, stderr=PIPE)
     time.sleep(1)
     stdout, stderr = p1.communicate()
@@ -117,11 +121,13 @@ def runNetPipe(com):
     else:
         lines=list(filter(None, str(stderr).strip().split('-->')))
         lines2=list(filter(None, lines[1].strip().split(' ')))
-        #print(lines2)
-        return float(lines2[5])
-        #return float(lines2[0])
+        print(lines2)
+        if t == 1:
+            return float(lines2[0])
+        else:
+            return float(lines2[5])
     
-def runPingPong(msg_size, rx_delay):
+def runPingPong(msg_size, rx_delay, t):
     runRemoteCommand("pkill NPtcp")
     time.sleep(1)
     runLocalCommand("pkill NPtcp")
@@ -130,23 +136,23 @@ def runPingPong(msg_size, rx_delay):
     time.sleep(1)
     runRemoteCommand("taskset -c 1 NPtcp -l "+msg_size+" -u "+msg_size+"-p 0 -r -I")
     time.sleep(2)
-    return runNetPipe("taskset -c 1 NPtcp -h "+SERVER+" -l "+msg_size+" -u "+msg_size+" -n 1 -p 0 -r -I")
+    return runNetPipe("taskset -c 1 NPtcp -h "+SERVER+" -l "+msg_size+" -u "+msg_size+" -n 1 -p 0 -r -I", t)
 
-def mainLinuxCompare():
+def mainLinuxCompare(tt):
     running_reward = 5
     for i_episode in range(1, 2):
         print("************** Episode", i_episode, "**************")
         ep_reward = 0
-        for t in range(1, 3):
+        for t in range(1, 100):
             state = []
-            state.append(random.randint(1, 222222))
+            state.append(random.randint(64, 20000))
             print('\t step='+str(t)+' state='+str(state[0]), end=' ', flush=True)
             action = select_action(np.array(state))
             print('action='+str(int(action)), end=' ', flush=True)
                         
             msg_size = str(state[0])
             rx_delay = str(int(action))
-            tput = runPingPong(msg_size, rx_delay)
+            tput = runPingPong(msg_size, rx_delay, tt)
             print('tput='+str(tput), end=' ', flush=True)
                         
             if msg_size not in linux_default:
@@ -163,17 +169,17 @@ def mainLinuxCompare():
             
         running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
         finish_episode()
-        print("\t Saving model to reinforce.pt")
-        torch.save(policy.state_dict(), "./reinforce.pt")
+        print("\t Saving model to reinforce2.pt")
+        torch.save(policy.state_dict(), "./reinforce2.pt")
         print('************** Episode {}\tLast reward: {:.2f}\tAverage reward: {:.2f} **************'.format(i_episode, ep_reward, running_reward))
         print("")
 
-def main():
+def main(t):
     total_msg_sz = 0
     total_time = 0
     threshold = 1000000
     while total_msg_sz < threshold:
-        msg_size = random.randint(1, 100000)
+        msg_size = random.randint(1, 20000)
         if msg_size + total_msg_sz > threshold:
             msg_size = threshold - total_msg_sz
         total_msg_sz += msg_size
@@ -183,26 +189,40 @@ def main():
         action = select_action(np.array(state))
         smsg_size = str(state[0])
         rx_delay = str(int(action))
-        time_taken = runPingPong(smsg_size, rx_delay)
+        time_taken = runPingPong(smsg_size, rx_delay, t)
         total_time += float(time_taken)
         print('msg_size=%s rx_delay=%s time_taken=%.6f' % (smsg_size, rx_delay, time_taken))
 
     reward = ((threshold*8)/1000000.0)/total_time
     print("reward = %.2f mbps" % (reward))
     finish_episode2(reward)
-    print("\t Saving model to reinforce_one_reward.pt")
-    torch.save(policy.state_dict(), "./reinforce_one_reward.pt")
-
-def run():
-    print("Loading model reinforce.pt")
-    policy.load_state_dict(torch.load("./reinforce_one_reward.pt"))
-    policy.eval()
+    print("\t Saving model to reinforce_one_reward2.pt")
+    torch.save(policy.state_dict(), "./reinforce_one_reward2.pt")
     
 if __name__ == '__main__':
-    for i in range(0, 81, 2):
-        print(i, end=' ', flush=True)
+    #policy.load_state_dict(torch.load("./reinforce2.pt"))
+    #policy.eval()
+    #for i in range(1, 200000):
+    #    state = []
+    #    state.append(i)
+    #    action = select_action(np.array(state))
+    #    msg_size = str(state[0])
+    #    rx_delay = str(int(action))
+    #    print("%s,%s" % (msg_size, rx_delay))
+
+    if int(sys.argv[1]) == 1:
+        #print("Loading model reinforce2.pt")
+        #policy.load_state_dict(torch.load("./reinforce2.pt"))
+        mainLinuxCompare(1)
+    else:
+        print("Loading model reinforce_one_reward2.pt")
+        policy.load_state_dict(torch.load("./reinforce_one_reward2.pt"))
+        main(2)
+        
+#    for i in range(0, 81, 2):
+#        print(i, end=' ', flush=True)
  
-   # policy.load_state_dict(torch.load("./reinforce.pt"))
+
 #    policy.load_state_dict(torch.load("./reinforce_one_reward.pt"))
     #policy.eval()
 #    for i in range(1, 200000):
