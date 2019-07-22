@@ -1,5 +1,5 @@
 #! /bin/bash
-
+ 
 export DEBUG=${DEBUG:=}
 export PROC=${PROC:=1}
 export COUNT=${COUNT:=5}
@@ -117,15 +117,15 @@ function runPerf
 		        #ncachemiss=$(ssh $SERVER cat perf.out | grep "cache-misses" | cut -d ',' -f1)
 			#nllclmiss=$(ssh $SERVER cat perf.out | grep "LLC-load-misses" | cut -d ',' -f1)
 			#nllcsmiss=$(ssh $SERVER cat perf.out | grep "LLC-store-misses" | cut -d ',' -f1)
-			#energypkg=$(ssh $SERVER cat perf.out | grep "energy-pkg" | cut -d ',' -f1)
-			#energyram=$(ssh $SERVER cat perf.out | grep "energy-ram" | cut -d ',' -f1)
+			energypkg=$(ssh $SERVER cat perf.out | grep "energy-pkg" | cut -d ',' -f1)
+			energyram=$(ssh $SERVER cat perf.out | grep "energy-ram" | cut -d ',' -f1)
 		        #ncpuidle=$(ssh $SERVER cat perf.out | grep "cpu_idle" | cut -d ',' -f1)
 		        #ncpufreq=$(ssh $SERVER cat perf.out | grep "cpu_frequency" | cut -d ',' -f1)
-			#totaltime=$(cat np.out | tr -s ' ' | cut -d ' ' -f 5)
-			#tput=$(cat np.out | tr -s ' ' | cut -d ' ' -f 3)
+			totaltime=$(cat np.out | tr -s ' ' | cut -d ' ' -f 5)
+			tput=$(cat np.out | tr -s ' ' | cut -d ' ' -f 3)
 			
 			#echo "$u $tput" | awk '{printf "min_time %.2f usec, time %.2f usec, ratio %.2f\n", ($1*8)/10000.0, ($1*8)/$2, (($1*8)/10000.0)/ (($1*8)/$2)}'
-			#echo "$tput" | awk '{printf "throughput %.2f\n", $1}'
+			echo "$tput" | awk '{printf "throughput %.2f\n", $1}'
 			#echo "$ncycles" | awk '{printf "num_cycles %d\n", $1}'
 			#echo "$ninstructions" | awk '{printf "num_instructions %d\n", $1}'
 			#echo "$nllclmiss" | awk '{printf "LLC-load-misses %d\n", $1}'
@@ -135,7 +135,7 @@ function runPerf
 			#echo "$energypkg $totaltime" | awk '{printf "RAPL_PKG_Power %.2f Watts\n", $1/$2}'
 			#echo "$energyram $totaltime" | awk '{printf "RAPL_DRAM_Power %.2f Watts\n", $1/$2}'
 			#echo "$intrtot" | awk '{printf "num_interrupts %d\n", $1}'
-			#echo "$energypkg $energyram $totaltime" | awk '{printf "Total_Power %.2f Watts\n", ($1+$2)/$3}'
+			echo "$energypkg $energyram $totaltime" | awk '{printf "Total_Power %.2f Watts\n", ($1+$2)/$3}'
 			#echo "$ncpuidle" | awk '{printf "power:cpu_idle %.2f\n", $1}'
 			#echo "$ncpufreq" | awk '{printf "power:cpu_frequency %.2f\n", $1}'
 			
@@ -245,6 +245,38 @@ function gather() {
     do	
 	#echo "run" $iter $currdate
 	run $iter $currdate
+    done
+}
+
+function ttest() {
+    for iter in `seq 1 1 $NITERS`;
+    do
+	for rxu in $RXU;
+	do
+	    ssh $SERVER "ethtool -C enp4s0f1 rx-usecs $rxu"
+	    echo "RXU = "$rxu
+	    for u in `seq 70 5 1500`;
+	    do	    
+		ssh $SERVER pkill NPtcp
+		sleep 0.1
+		pkill NPtcp
+		sleep 0.1
+		output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
+		sleep 1
+		intrstart=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-1" | tr -s ' ' | cut -d ' ' -f 4 )
+		taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n $NPITER -p 0 -r -I
+		intrend=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-1" | tr -s ' ' | cut -d ' ' -f 4 )
+		intrtot=$((intrend-intrstart))
+
+		if [ $OUTFILE -eq 1 ]; then
+		    file="netpipe_data/$currdate/np_"$u\_$rxu\_$RXQ\_$TXQ\_$iter".log" 
+		    cp np.out $file
+		    scp $SERVER:~/perf.out "netpipe_data/$currdate/np_"$u\_$rxu\_$RXQ\_$TXQ\_$iter".perf"
+		    echo "num_interrupt,,"$intrtot >> "netpipe_data/$currdate/np_"$u\_$rxu\_$RXQ\_$TXQ\_$iter".perf"
+		fi
+		sleep 0.5
+	    done
+	done
     done
 }
 
@@ -428,6 +460,13 @@ elif [ "$1" = "gatherRandLimit" ]; then
     fi
     $1    
 elif [ "$1" = "reinforce" ]; then
+    $1
+elif [ "$1" = "ttest" ]; then
+    echo "Running $1 RXU=$RXU NPITER=$NPITER RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS"
+    if [ $OUTFILE -eq 1 ]; then
+	mkdir -p "netpipe_data/$currdate"
+	echo "Running $1 RXU=$RXU NPITER=$NPITER RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGS=$MSGS" > "netpipe_data/$currdate/command.txt"
+    fi
     $1
 else
     echo "unknown command"

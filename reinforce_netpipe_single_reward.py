@@ -138,4 +138,12 @@ if __name__ == '__main__':
     except FileNotFoundError:
         print("reinforce_single_reward.dict not found")
 
-    main()
+    #main()
+    #policy.eval()
+    #for i in range(1, 250000):
+    #    state = [i]
+    #    action = select_action(np.array(state))
+    #    msg_size = str(state[0])
+    #    rx_delay = str(int(action))
+    #    print(msg_size, rx_delay)
+
