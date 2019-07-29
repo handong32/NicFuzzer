@@ -18,12 +18,12 @@ function run
 
     for iter in `seq 1 1 $NITERS`;
     do
-	for rxu in `seq 0 2 150`;
-	#for rxu in `seq 120 2 121`;
+	#for rxu in `seq 0 2 150`;
+	for rxu in `seq 120 2 121`;
 	do
 	    ssh $SERVER "ethtool -C enp4s0f1 rx-usecs $rxu"
-	    ssh $SERVER "pkill memcached"
-	    pkill mutilate
+	    #ssh $SERVER "pkill memcached"
+	    #pkill mutilate
 	    echo "**** ITER="$iter "RXU="$rxu
 	    intrstart1=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-1" | tr -s ' ' | cut -d ' ' -f 4 )
 	    intrstart3=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-3" | tr -s ' ' | cut -d ' ' -f 6 )
@@ -33,7 +33,7 @@ function run
 	    intrstart11=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-11" | tr -s ' ' | cut -d ' ' -f 14 )
 	    intrstart13=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-13" | tr -s ' ' | cut -d ' ' -f 16 )
 	    intrstart15=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-15" | tr -s ' ' | cut -d ' ' -f 18 )
-	    python -u mutilate_bench.py
+	    python -u zygos_silo.py
 	    intrend1=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-1" | tr -s ' ' | cut -d ' ' -f 4 )
 	    intrend3=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-3" | tr -s ' ' | cut -d ' ' -f 6 )
 	    intrend5=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-5" | tr -s ' ' | cut -d ' ' -f 8 )
@@ -53,16 +53,16 @@ function run
 	    intrtot15=$((intrend15-intrstart15))
 	    
 	    if [ $OUTFILE -eq 1 ]; then
-		cp mutilate.log "mcd_data/$currdate/mcd_"$rxu\_$iter".log"
-		scp $SERVER:~/perf.out "mcd_data/$currdate/mcd_"$rxu\_$iter".perf"
-		echo $intrtot1",itr1" >> "mcd_data/$currdate/mcd_"$rxu\_$iter".perf"
-		echo $intrtot3",itr3" >> "mcd_data/$currdate/mcd_"$rxu\_$iter".perf"
-		echo $intrtot5",itr5" >> "mcd_data/$currdate/mcd_"$rxu\_$iter".perf"
-		echo $intrtot7",itr7" >> "mcd_data/$currdate/mcd_"$rxu\_$iter".perf"
-		echo $intrtot9",itr9" >> "mcd_data/$currdate/mcd_"$rxu\_$iter".perf"
-		echo $intrtot11",itr11" >> "mcd_data/$currdate/mcd_"$rxu\_$iter".perf"
-		echo $intrtot13",itr13" >> "mcd_data/$currdate/mcd_"$rxu\_$iter".perf"
-		echo $intrtot15",itr15" >> "mcd_data/$currdate/mcd_"$rxu\_$iter".perf"
+		cp mutilate.log "mcd_data/$currdate/zyg_"$rxu\_$iter".log"
+		scp $SERVER:~/perf.out "mcd_data/$currdate/zyg_"$rxu\_$iter".perf"
+		echo $intrtot1",itr1" >> "mcd_data/$currdate/zyg_"$rxu\_$iter".perf"
+		echo $intrtot3",itr3" >> "mcd_data/$currdate/zyg_"$rxu\_$iter".perf"
+		echo $intrtot5",itr5" >> "mcd_data/$currdate/zyg_"$rxu\_$iter".perf"
+		echo $intrtot7",itr7" >> "mcd_data/$currdate/zyg_"$rxu\_$iter".perf"
+		echo $intrtot9",itr9" >> "mcd_data/$currdate/zyg_"$rxu\_$iter".perf"
+		echo $intrtot11",itr11" >> "mcd_data/$currdate/zyg_"$rxu\_$iter".perf"
+		echo $intrtot13",itr13" >> "mcd_data/$currdate/zyg_"$rxu\_$iter".perf"
+		echo $intrtot15",itr15" >> "mcd_data/$currdate/zyg_"$rxu\_$iter".perf"
 	    fi
 	    sleep 1
 	done
