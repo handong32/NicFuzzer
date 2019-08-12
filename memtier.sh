@@ -19,7 +19,7 @@ function run
     for iter in `seq 1 1 $NITERS`;
     do
 	#for rxu in `seq 0 10 1000`;
-	for rxu in `seq 0 10 1`;
+	for rxu in `seq 0 2 1`;
 	do
 	    echo "iter="$iter "rxu="$rxu
 	    intrstart1=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-1" | tr -s ' ' | cut -d ' ' -f 4 )

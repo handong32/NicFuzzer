@@ -33,12 +33,12 @@ def runMutilate(com):
 def runBench():
     #runRemoteCommandOut("pkill memcached")
     #runLocalCommandOut("pkill mutilate")
-    #runRemoteCommand("chrt -r 1 perf stat -C 1,3,5,7,9,11,13,15 -D 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ -x, numactl --cpunodebind=1 --membind=1 memcached -u nobody -t 8 -m 16G -l "+MASTER+" -B binary")
-    #time.sleep(1)
-    #runLocalCommandOut("taskset -c 1 mutilate --binary -s "+MASTER+" --loadonly -K fb_key -V fb_value")
+    runRemoteCommand("chrt -r 1 perf stat -C 1,3,5,7,9,11,13,15 -D 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ -x, numactl --cpunodebind=1 --membind=1 memcached -u nobody -t 8 -m 16G -l "+MASTER+" -B binary")
+    time.sleep(1)
+    runLocalCommandOut("taskset -c 1 mutilate --binary -s "+MASTER+" --loadonly -K fb_key -V fb_value")
     runLocalCommand("taskset -c 3,5,7,9,11,13,15 mutilate -A --affinity -T 7")
     time.sleep(1)
-    runMutilate("taskset -c 1 mutilate --binary -B -s "+MASTER+" -a localhost -K fb_key -V fb_value -i fb_ia -u 0.25 -c 8 -d 4 -C 8 --search=99:1000 -t 60")
+    runMutilate("taskset -c 1 mutilate --binary -B -s "+MASTER+" --noload -a localhost -K fb_key -V fb_value -i fb_ia -u 0.25 -c 8 -d 4 -C 8 --search=99:500 -t 60")
     runRemoteCommandOut("pkill memcached")
 
 if __name__ == '__main__':

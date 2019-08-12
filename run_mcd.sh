@@ -18,10 +18,10 @@ function run
 
     for iter in `seq 1 1 $NITERS`;
     do
-	for rxu in `seq 0 2 150`;
-	#for rxu in `seq 120 2 121`;
+	#for rxu in `seq 0 2 150`;
+	for rxu in `seq 0 2 1`;
 	do
-	    ssh $SERVER "ethtool -C enp4s0f1 rx-usecs $rxu"
+	    #ssh $SERVER "ethtool -C enp4s0f1 rx-usecs $rxu"
 	    ssh $SERVER "pkill memcached"
 	    pkill mutilate
 	    echo "**** ITER="$iter "RXU="$rxu

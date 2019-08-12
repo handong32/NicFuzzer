@@ -4,11 +4,11 @@ import gym
 import numpy as np
 from itertools import count
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.distributions import Categorical
+#import torch
+#import torch.nn as nn
+#import torch.nn.functional as F
+#import torch.optim as optim
+#from torch.distributions import Categorical
 
 import subprocess
 from subprocess import Popen, PIPE, call
@@ -17,7 +17,7 @@ import sys
 import os
 import random
 from datetime import datetime
-import pickle
+#import pickle
 
 #parser = argparse.ArgumentParser(description='PyTorch REINFORCE netpipe example')
 #parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
@@ -29,15 +29,15 @@ import pickle
 #parser.add_argument('--ttype', type=int, default=0, metavar='N',
 #                    help='type')
 
-gamma = 0.99
+#gamma = 0.99
 #args = parser.parse_args()
-timenow = datetime.now()
-torch.manual_seed(timenow.second)
-random.seed(timenow.second)
+#timenow = datetime.now()
+#torch.manual_seed(timenow.second)
+#random.seed(timenow.second)
 
-linux_default = pickle.load(open("linux_default.pickle", "rb"))
+#linux_default = pickle.load(open("linux_default.pickle", "rb"))
 SERVER = "192.168.1.200"
-            
+'''            
 class Policy(nn.Module):
     def __init__(self):
         super(Policy, self).__init__()
@@ -97,16 +97,22 @@ def finish_episode2(total_reward):
     #print("policy_loss", policy_loss)
     optimizer.step()
     del policy.saved_log_probs[:]
-    
+'''
+
 def runLocalCommand(com):
     p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE)
 
 def runRemoteCommand(com):
     p1 = Popen(["ssh", SERVER, com], stdout=PIPE)
-    
+
+def runRemoteCommandGet(com):
+    p1 = Popen(["ssh", SERVER, com], stdout=PIPE)
+    return p1.communicate()[0].strip()
+
 def runRemoteCommandOut(com):
     p1 = Popen(["ssh", SERVER, com], stdout=PIPE)
     print("\tssh "+SERVER, com, "->\n", p1.communicate()[0].strip())
+    return p1.communicate()[0].strip()
     
 def runLocalCommandOut(com):
     p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE)
@@ -114,30 +120,84 @@ def runLocalCommandOut(com):
 
 def runNetPipe(com, t):
     p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE, stderr=PIPE)
-    time.sleep(1)
+    #time.sleep(1)
     stdout, stderr = p1.communicate()
     if len(stderr) == 0:
         return 0.0
     else:
+        #print(stdout)
+        #print(stderr)
+        #return 1.0
         lines=list(filter(None, str(stderr).strip().split('-->')))
         lines2=list(filter(None, lines[1].strip().split(' ')))
-        print(lines2)
+#        print(lines2)
         if t == 1:
             return float(lines2[0])
         else:
             return float(lines2[5])
     
-def runPingPong(msg_size, rx_delay, t):
+def runPingPong(msg_size, rx_delay, T, t):
     runRemoteCommand("pkill NPtcp")
     time.sleep(1)
     runLocalCommand("pkill NPtcp")
     time.sleep(1)
     runRemoteCommand("ethtool -C enp4s0f1 rx-usecs "+rx_delay)
     time.sleep(1)
-    runRemoteCommand("taskset -c 1 NPtcp -l "+msg_size+" -u "+msg_size+"-p 0 -r -I")
-    time.sleep(2)
-    return runNetPipe("taskset -c 1 NPtcp -h "+SERVER+" -l "+msg_size+" -u "+msg_size+" -n 1 -p 0 -r -I", t)
+    itrstart = runRemoteCommandGet("cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-1 | tr -s ' ' | cut -d ' ' -f 4")
+    runRemoteCommand ("perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/,syscalls:sys_enter_read,syscalls:sys_enter_write,'net:*','power:*' -x, taskset -c 1 NPtcp -l "+msg_size+" -u "+msg_size+" -p 0 -r -I")
+    time.sleep(1)
+    ret = runNetPipe("taskset -c 1 NPtcp -h "+SERVER+" -l "+msg_size+" -u "+msg_size+" -T "+T+" -p 0 -r -I", t)
+    itrend = runRemoteCommandGet("cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-1 | tr -s ' ' | cut -d ' ' -f 4")
+    time.sleep(1)
+    output = runRemoteCommandGet("cat perf.out")
+    cache_misses = 0
+    nins = 0
+    joules = 0
+    sys_enter_read = 0
+    sys_enter_write = 0
+    netif_receive_skb = 0
+    napi_gro_receive_entry = 0
+    cpu_idle = 0
+    watts = 0
+    arr = []
+    arr.append(ret)
+    np.set_printoptions(precision=2)
+    for l in str(output).split("\\n"):
+        #print(l)
+        f = list(filter(None, l.strip().split(',')))
+        if 'instructions' in l:
+            nins = float(f[0])
+            arr.append(float(f[0]))
+        if 'LLC' in l:
+            cache_misses += float(f[0])
+            arr.append(float(f[0]))
+        if 'Joules' in l:
+            joules += float(f[0])
+            #arr.append(float(f[0]))
+        if 'sys_enter_read' in l:
+            sys_enter_read = float(f[0])
+            arr.append(float(f[0]))
+        if 'sys_enter_write' in l:
+            sys_enter_write = float(f[0])
+            arr.append(float(f[0]))
+        if 'napi_gro_receive_entry' in l:
+            napi_gro_receive_entry = float(f[0])
+            arr.append(float(f[0]))
+        if 'cpu_idle' in l:
+            cpu_idle = float(f[0])
+            arr.append(float(f[0]))
 
+    watts = joules/float(T)
+    arr.append(watts)
+    arr.append(int(itrend) - int(itrstart))
+    print("original", np.array(arr))
+    print("per watt", np.array(arr) / watts)
+    #print(ret, nins, cache_misses, joules, sys_enter_read, sys_enter_write, napi_gro_receive_entry, cpu_idle)
+
+#runPingPong("4096", "10", "5", 1)
+runPingPong(sys.argv[1], sys.argv[2], sys.argv[3], 1)
+#print(sys.argv[1], sys.argv[2])
+'''
 def mainLinuxCompare(tt):
     running_reward = 5
     for i_episode in range(1, 2):
@@ -198,8 +258,8 @@ def main(t):
     finish_episode2(reward)
     print("\t Saving model to reinforce_one_reward2.pt")
     torch.save(policy.state_dict(), "./reinforce_one_reward2.pt")
-    
-if __name__ == '__main__':
+''' 
+#if __name__ == '__main__':
     #policy.load_state_dict(torch.load("./reinforce2.pt"))
     #policy.eval()
     #for i in range(1, 200000):
@@ -210,14 +270,14 @@ if __name__ == '__main__':
     #    rx_delay = str(int(action))
     #    print("%s,%s" % (msg_size, rx_delay))
 
-    if int(sys.argv[1]) == 1:
+    #if int(sys.argv[1]) == 1:
         #print("Loading model reinforce2.pt")
         #policy.load_state_dict(torch.load("./reinforce2.pt"))
-        mainLinuxCompare(1)
-    else:
-        print("Loading model reinforce_one_reward2.pt")
-        policy.load_state_dict(torch.load("./reinforce_one_reward2.pt"))
-        main(2)
+   #     mainLinuxCompare(1)
+   # else:
+   #     print("Loading model reinforce_one_reward2.pt")
+   #     policy.load_state_dict(torch.load("./reinforce_one_reward2.pt"))
+   #     main(2)
         
 #    for i in range(0, 81, 2):
 #        print(i, end=' ', flush=True)
