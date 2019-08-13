@@ -30,6 +30,7 @@ function run
 	for rxu in $RXU;
 	do
 	    ssh $SERVER "ethtool -C enp4s0f1 rx-usecs $rxu"
+	    sleep 1
 	    for rxq in $RXQ;
 	    do
 		for txq in $TXQ;
@@ -51,9 +52,9 @@ function run
 			ssh $SERVER pkill NPtcp
 			pkill NPtcp
 			sleep 1
-			output1=$(ssh $SERVER "taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
+			output1=$(ssh $SERVER "taskset -c 3 NPtcp -l $u -u $u -p 0 -r -I") &
 			sleep 1
-			taskset -c 1 NPtcp -h $SERVER -l $u -u $u -n $NPITER -p 0 -r -I
+			taskset -c 3 NPtcp -h $SERVER -l $u -u $u -n $NPITER -p 0 -r -I
 			if [ $OUTFILE -eq 1 ]; then
 			    cp np.out "netpipe_data/$2/np_"$u\_$rxu\_$rxq\_$txq\_$1".log"
 			fi
@@ -78,6 +79,7 @@ function runPerf
 	for rxu in $RXU;
 	do
 	    ssh $SERVER "ethtool -C enp4s0f1 rx-usecs $rxu"
+	    sleep 0.5
 	    for rxq in $RXQ;
 	    do
 		for txq in $TXQ;
@@ -97,14 +99,14 @@ function runPerf
 		    
 		    if [ $success -eq 1 ]; then
 			ssh $SERVER pkill NPtcp
-			sleep 0.1
+			sleep 0.5
 			pkill NPtcp
-			sleep 0.1
+			sleep 0.5
 			#if [ $OUTFILE -eq 1 ]; then
 			    #output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,cache-misses,page-faults,power/energy-pkg/,power/energy-cores/,power/energy-ram/,syscalls:sys_enter_read,syscalls:sys_enter_write,'net:*','power:*' -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
 			#    output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,cache-misses,power/energy-pkg/,power/energy-ram/,'power:*' -x, taskset -c 1 NPtcp -l $u -u $u -p 0 -r -I") &
 			#else
-			output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/,syscalls:sys_enter_read,syscalls:sys_enter_write,'net:*','power:*' -x, taskset -c 1 NPtcp -l $u -u $u -n $NPITER -p 0 -r -I") &
+			output1=$(ssh $SERVER "perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses -x, taskset -c 1 NPtcp -l $u -u $u -n $NPITER -p 0 -r -I") &
 			#fi
 			sleep 1
 			intrstart=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-1" | tr -s ' ' | cut -d ' ' -f 4 )

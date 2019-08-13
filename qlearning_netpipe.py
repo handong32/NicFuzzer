@@ -322,8 +322,13 @@ if __name__ == '__main__':
     except FileNotFoundError:
         print("static_tput_watt_8_9.pickle not found")
 
-    runNetPipe()
+    #    runNetPipe()
+    try:
+        target_net.load_state_dict(torch.load("target_net810.pt"))
+    except FileNotFoundError:
+        print("qlearn_netpipe87.pt not found")
 
+        
     print("Training Complete")
     print("target_net eval now:")
     target_net.eval()
@@ -332,7 +337,7 @@ if __name__ == '__main__':
         state = torch.from_numpy(np.array([i])).float().unsqueeze(0).to(device)
         with torch.no_grad():
             key = int(target_net(state).max(1)[1].view(1, 1).item())*2
-            print(i, key)
+            #print(i, key)
             if key not in mdict.keys():
                 mdict[key] = 0
             else:
