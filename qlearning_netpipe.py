@@ -27,6 +27,11 @@ CSERVER = "192.168.1.200"
 #linuxdef = {}
 static_tput_watt = {}
 
+torch.manual_seed(0)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+np.random.seed(0)
+
 def runLocalCommandOut(com):
     p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE)
     print("\t"+com, "->\n", p1.communicate()[0].strip())
@@ -313,6 +318,100 @@ def runNetPipe():
         # log linux history
         pickle.dump(static_tput_watt, open("static_tput_watt_8_9.pickle", "wb"))
 
+def runNetpipe2(fn):
+    f = open(fn, 'r')
+    mdict = {}
+    for l in f:
+        tmp = l.split(" ")
+        msg = 0
+        action = 0
+        tput = 0
+        for t in tmp:
+            if "MSG=" in t:
+                msg = int(t.split("=")[1])
+            if "Laction=" in t:
+                action = int(t.split("=")[1]) / 2
+            if "Ltput=" in t:
+                tput = float(t.split("=")[1])
+
+        if msg not in mdict.keys():
+            mdict[msg] = [action, tput]
+        else:
+            if tput > mdict[msg][1]:
+                mdict[msg] = [action, tput]
+    f.close()
+    #print(mdict)
+
+    ldict = list(mdict.keys())
+    print(ldict[0], ldict[len(ldict)-1])
+    
+    for i in range(0, len(ldict)):
+        state = ldict[i]
+        next_state = None
+        if i + 1 < len(ldict):
+            next_state = ldict[i+1]
+            next_state = torch.from_numpy(np.array([next_state], dtype=np.int32)).float().unsqueeze(0).to(device)
+            
+        action = mdict[state][0]
+        reward = torch.tensor([mdict[state][1]], device=device)
+        action = torch.tensor([action], device=device, dtype=torch.long)
+        state = torch.from_numpy(np.array([state])).float().unsqueeze(0).to(device)
+        memory.push(state, action, next_state, reward)
+        optimize_model()
+
+    target_net.load_state_dict(policy_net.state_dict())
+
+    print("Training Complete")
+    print("target_net eval now:")
+    target_net.eval()
+    #adict = {}
+    prev = 0
+    for i in range(low_msg_size, high_msg_size):
+        state = torch.from_numpy(np.array([i])).float().unsqueeze(0).to(device)
+        with torch.no_grad():
+            action = int(target_net(state).max(1)[1].view(1, 1).item())*2
+            if action != prev:
+                print("Msg=", i, " Action=", action)
+                prev = action
+            
+            #if key not in adict.keys():
+            #    adict[key] = 0
+            #else:
+            #    adict[key] += 1
+
+    #print(adict)
+    
+runNetpipe2("tmp.log")
+
+    
+'''
+def runNetpipe3(fn):
+    f = open(fn, 'r')
+    mdict = {}
+    for l in f:
+        tmp = l.split(" ")
+        msg = 0
+        action = 0
+        tput = 0
+        for t in tmp:
+            if "MSG=" in t:
+                msg = int(t.split("=")[1])
+            if "Laction=" in t:
+                action = int(t.split("=")[1]) / 2
+            if "Ltput=" in t:
+                tput = float(t.split("=")[1])
+
+        if msg > 9600 and msg < 10600:
+            print(l.strip())
+        if msg not in mdict.keys():
+            mdict[msg] = [action, tput]
+        else:
+            if tput > mdict[msg][1]:
+                mdict[msg] = [action, tput]
+    f.close()
+    #print(mdict)
+
+runNetpipe3("tmp.log")
 
 if __name__ == '__main__':
     try:
@@ -344,6 +443,7 @@ if __name__ == '__main__':
                 mdict[key] += 1
 
     print(mdict)
+''' 
 '''
 try:
         print("Loading qlearn_netpipe87.pt")

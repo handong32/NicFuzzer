@@ -39,11 +39,6 @@ def initMCDParams():
     #PARAMS.append(str(4096))
     print PARAMS
 
-def resetEm2():
-    call(["ssh", CNODE, "ifdown em2.302"])
-    call(["ssh", CNODE, "ifup em2.302"])
-    time.sleep(2)
-
 def updateIperfConfig():
     global RXUSECS
     global RXRING
@@ -75,7 +70,12 @@ def updateMCDConfig():
     #else:
     #    TXRING=PARAMS[i]
     #print "i=",i,"RXU=",RXUSECS,"RXRING=",RXRING,"TXRING=",TXRING
-    
+
+def resetEm2():
+    call(["ssh", CNODE, "ifdown em2.302"])
+    call(["ssh", CNODE, "ifup em2.302"])
+    time.sleep(2)
+
 def updateNIC():
     p1 = Popen(["ssh", CNODE, "ethtool -C em2 rx-usecs", RXUSECS], stdout=PIPE, stderr=PIPE)
     tmp = p1.communicate()[0]
