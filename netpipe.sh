@@ -470,7 +470,7 @@ else
     echo "unknown command"
 
     while true; do
-    	timeout 30 python3 -u netpipe.py
+    	timeout 30 python netpipe2.py
 	sleep 1
     done
 fi
