@@ -11,18 +11,57 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import zmq
 
-torch.manual_seed(0)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-np.random.seed(0)
-
+plt.ion()
+#device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device = "cpu"
 
-context = zmq.Context()
-sock = context.socket(zmq.PAIR)
-sock.bind("tcp://*:5563")
+def runPingPong2(msg_size, rx_delay): 
+    #if msg_size % 2 == 0: 
+    '''
+    #Option 1: doesn't work
+    msg_size, rx_delay = float(msg_size), float(rx_delay)
+
+    if msg_size > 10000:
+        if 1.5 < rx_delay < 2.5: 
+            val = 1
+        else: 
+            val = 0
+    else: 
+        if 7.5 < rx_delay < 8.5: 
+            val = 1
+        else: 
+            val = 0
+
+    return val
+    '''
+
+    #Option 2: continuous reward structure. works
+    #return -torch.abs(msg_size - rx_delay)
+
+    '''
+    #Option 3: same as option 1 but recaled msg values. doesn't work.
+    if msg_size > 4.5:
+        if 1.5 < rx_delay < 2.5: 
+            val = 1
+        else: 
+            val = 0
+    else: 
+        if 7.5 < rx_delay < 8.5: 
+            val = 1
+        else: 
+            val = 0
+    
+    return val
+    '''
+
+    #option 4: continuous version of binary threshold. works
+    optimal_delay = 9. / (1 + np.exp(-(msg_size - 4.5)/0.1))
+
+    return -torch.abs(rx_delay - optimal_delay)
+
+
+
 
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
@@ -74,10 +113,12 @@ TARGET_UPDATE = 10
 TIME_LENGTH = 10
 STATE_STEP_SIZE = 0.1
 
-num_episodes = 9000
+num_episodes = 200
+low_msg_size = 0
+high_msg_size = 9
 
 n_inputs = 1
-n_actions = 7
+n_actions = 10 #10-100 in steps of 100
 
 policy_net = DQN(n_inputs, n_actions).to(device)
 target_net = DQN(n_inputs, n_actions).to(device)
@@ -156,58 +197,53 @@ def optimize_model():
         param.grad.data.clamp_(-1, 1)
     optimizer.step()        
 
-
-prev_tput = 1200.51
-state = 10
 for i_episode in range(num_episodes):
+    # Initialize the environment and state
+    #env.reset()
+    #last_screen = get_screen()
+    #current_screen = get_screen()
+    #state = current_screen - last_screen
+    state = np.random.uniform(low_msg_size, high_msg_size)
     done = False
 
     for t in count():
-        action = select_action(float(state))
-        iaction = int(action.item())
-        next_state = state
-        ### [0] == -10, [1] == -6, [2] == -2, [3] == 0, [4] == +2, [5] == +6, [6] == +10
-        if iaction == 0:
-            next_state -= 10
-        elif iaction == 1:
-            next_state -= 6
-        elif iaction == 2:
-            next_state -= 2
-        elif iaction == 4:
-            next_state += 2
-        elif iaction == 5:
-            next_state += 6
-        elif iaction == 6:
-            next_state += 10
-    
-        m = sock.recv()
-        sock.send(str(next_state))
-        tput = float(sock.recv())
-        reward = tput - prev_tput
-
-        print("i_episode=%d t=%d RXD=%d TPUT=%.2f REWARD=%.2f" % (i_episode, t, next_state, tput, reward))
+        # Select and perform an action
+        action = select_action(state)
+        #_, reward, done, _ = env.step(action.item())
+        reward = runPingPong2(state, action)
         reward = torch.tensor([reward], device=device)
 
         if t==TIME_LENGTH:
             done = True
-            memory.push(float(state), action, None, reward)
+
+        # Observe new state
+        if not done:
+            next_state = np.random.uniform(low_msg_size, high_msg_size)
+            #next_state = state + (np.random.randint(2)-1) * STATE_STEP_SIZE
+            #if next_state >= high_msg_size:
+            #    next_state -= 2*STATE_STEP_SIZE
+            #if next_state <= low_msg_size:
+            #    next_state += 2*STATE_STEP_SIZE
+
         else:
-            memory.push(float(state), action, float(next_state), reward)
-        
+            next_state = None
+
+        # Store the transition in memory
+        memory.push(state, action, next_state, reward)
+
         # Move to the next state
         state = next_state
 
-        # Update throughput
-        if tput > prev_tput:
-            prev_tput = tput
-            
+        # Perform one step of the optimization (on the target network)
+        #import pdb
+        #pdb.set_trace()
         optimize_model()
         if done:
             episode_durations.append(t + 1)
             break
-        
+    print("Episode = ", i_episode)
+    # Update the target network, copying all weights and biases in DQN
     if i_episode % TARGET_UPDATE == 0:
-        print("\t Saving target_net")
         target_net.load_state_dict(policy_net.state_dict())
-        torch.save(target_net.state_dict(), "target_net911.pt")
-        torch.save(policy_net.state_dict(), "policy_net911.pt")
+
+print('Complete')

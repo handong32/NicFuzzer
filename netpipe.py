@@ -51,8 +51,6 @@ def updateNIC():
     Notes about THRESH, PTHRESH, WTHRESH
 
     Transmit descriptor fetch setting is programmed in the TXDCTL[n] register per
-    queue. The default settings of PTHRESH, HTHRESH and WTHRESH are zero’s.
-
     In order to reduce transmission latency, it is recommended to set the PTHRESH value
     as high as possible while the HTHRESH and WTHRESH as low as possible (down to
     zero).
@@ -81,19 +79,24 @@ def updateNIC():
     this number drops below PTHRESH, the algorithm considers pre-fetching descriptors from
     host memory. However, this fetch does not happen unless there are at least HTHRESH
     valid descriptors in host memory to fetch. HTHRESH should be given a non-zero value each time PTHRESH is used.
-    
     '''
 
     # WTHRESH: Should not be higher than 1 when ITR == 0, else device basically crashes
     WTHRESH = np.random.randint(1, 40)
     
     #PTHRESH: WTHRESH + PTHRESH < 40
-    PTHRESH = 40 - WTHRESH
+    #PTHRESH = 40 - WTHRESH
+    PTHRESH = np.random.randint(1, (40 - WTHRESH))
     
     # HTHRESH
     HTHRESH = np.random.randint(1, 40)
 
-    # DTXMXSZRQ
+    '''
+    DTXMXSZRQ
+    The maximum allowed amount of 256 bytes outstanding requests. If the total
+    size request is higher than the amount in the field no arbitration is done and no
+    new packet is requested
+    '''
     DTXMXSZRQ = np.random.randint(1, 4096)
     
     #print("RXD=%d DTXMXSZRQ=%d WTHRESH=%d PTHRESH=%d HTHRESH=%d\n" % (ITR/2, DTXMXSZRQ, WTHRESH, PTHRESH, HTHRESH))
@@ -155,14 +158,35 @@ def runStatic(msg_size):
     time.sleep(0.5)
     runLocalCommand("pkill NPtcp")
     time.sleep(0.5)
-    runRemoteCommand(CSERVER, "taskset -c 1 NPtcp -l "+msg_size+" -u "+msg_size+" -p 0 -r -I")
+    itrstart = runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-1 | tr -s ' ' | cut -d ' ' -f 4")
+    runRemoteCommand (CSERVER2, "perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ -x, taskset -c 1 NPtcp -l "+msg_size+" -u "+msg_size+" -p 0 -r -I")
+    #runRemoteCommand(CSERVER, "taskset -c 1 NPtcp -l "+msg_size+" -u "+msg_size+" -p 0 -r -I")
     time.sleep(1)
     tput = runBench("taskset -c 1 NPtcp -h "+CSERVER+" -l "+msg_size+" -u "+msg_size+" -T 2 -p 0 -r -I")
-    return tput
-
-#updateNIC()
-#for i in itertools.count(1):
-
+    if tput > 0:
+        itrend = runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-1 | tr -s ' ' | cut -d ' ' -f 4")
+        time.sleep(0.5)
+        output = runRemoteCommandGet(CSERVER2, "cat perf.out")
+        nins = 0
+        ncycles = 0
+        cache_misses = 0
+        joules = 0
+        watts = 0
+        for l in str(output).split("\\n"):
+            f = list(filter(None, l.strip().split(',')))
+            if 'instructions' in l:
+                nins = float(f[0])
+            if 'cycles' in l:
+                ncycles = float(f[0])
+            if 'LLC' in l:
+                cache_misses += float(f[0])
+            if 'Joules' in l:
+                joules += float(f[0])
+        watts = joules/2.0
+        return tput,nins,ncycles,watts,cache_misses,int(itrend)-int(itrstart)
+    else:
+        return tput,0,0,0,0,0
+    
 if updateNIC() == 1:
     npu = np.random.random_sample()
     msg = np.random.randint(500, 20000)
@@ -183,6 +207,15 @@ if updateNIC() == 1:
     else:
         msg = np.random.randint(500, 500000)
             
-    tput = runStatic(str(msg))
-    print("MSG=%d RXD=%d DTXMXSZRQ=%d WTHRESH=%d PTHRESH=%d HTHRESH=%d TPUT=%.2f" % (msg, ITR/2, DTXMXSZRQ, WTHRESH, PTHRESH, HTHRESH, tput))
-    print("%d,%d,%d,%d,%d,%d,%.2f" % (msg, ITR/2, DTXMXSZRQ, WTHRESH, PTHRESH, HTHRESH, tput))
+    #tput = runStatic(str(msg))
+    tput,nins,ncycles,watts,cache_misses,nitr = runStatic(str(msg))
+    print("MSG=%d RXD=%d DTXMXSZRQ=%d WTHRESH=%d PTHRESH=%d HTHRESH=%d TPUT=%d INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%d INTERRUPTS=%d" % (msg, ITR/2, DTXMXSZRQ, WTHRESH, PTHRESH, HTHRESH, int(tput), int(nins), int(ncycles), int(cache_misses), int(watts), nitr))
+    print("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % (msg, ITR/2, DTXMXSZRQ, WTHRESH, PTHRESH, HTHRESH, int(tput), int(nins), int(ncycles), int(cache_misses), int(watts), nitr))
+
+
+
+
+
+
+
+    

@@ -171,6 +171,69 @@ function runPerf
     done    
 }
 
+function runRandPerf {
+    success=0
+    printf "NETPIPE TESTS\n"
+
+    for rxu in $RXU;
+    do
+	ssh $SERVER "ethtool -C enp4s0f1 rx-usecs $rxu"
+	sleep 0.5
+
+	ssh $SERVER pkill NPtcp
+	sleep 0.5
+	pkill NPtcp
+	sleep 0.5
+
+	intrstart1=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-1" | tr -s ' ' | cut -d ' ' -f 4 )
+	intrstart3=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-3" | tr -s ' ' | cut -d ' ' -f 6 )
+	intrstart5=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-5" | tr -s ' ' | cut -d ' ' -f 8 )
+	intrstart7=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-7" | tr -s ' ' | cut -d ' ' -f 10 )
+	intrstart9=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-9" | tr -s ' ' | cut -d ' ' -f 12 )
+	intrstart11=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-11" | tr -s ' ' | cut -d ' ' -f 14 )
+	intrstart13=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-13" | tr -s ' ' | cut -d ' ' -f 16 )
+	intrstart15=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-15" | tr -s ' ' | cut -d ' ' -f 18 )
+
+	#output1=$(ssh $SERVER "taskset -c 1 NPtcp -l $MSGL -u $MSGU -p 0 -r -I -x") &
+	output1=$(ssh $SERVER "perf stat -a --per-socket -D 1000 -o perf.out -e instructions,cycles,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ taskset -c 1 NPtcp -l $MSGL -u $MSGU -p 0 -r -I -x") &
+	sleep 1
+	taskset -c 1 NPtcp -h $SERVER -l $MSGL -u $MSGU -n $NPITER -p 0 -r -I -x
+
+	intrend1=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-1" | tr -s ' ' | cut -d ' ' -f 4 )
+	intrend3=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-3" | tr -s ' ' | cut -d ' ' -f 6 )
+	intrend5=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-5" | tr -s ' ' | cut -d ' ' -f 8 )
+	intrend7=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-7" | tr -s ' ' | cut -d ' ' -f 10 )
+	intrend9=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-9" | tr -s ' ' | cut -d ' ' -f 12 )
+	intrend11=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-11" | tr -s ' ' | cut -d ' ' -f 14 )
+	intrend13=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-13" | tr -s ' ' | cut -d ' ' -f 16 )
+	intrend15=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-15" | tr -s ' ' | cut -d ' ' -f 18 )
+	
+	intrtot1=$((intrend1-intrstart1))
+	intrtot3=$((intrend3-intrstart3))
+	intrtot5=$((intrend5-intrstart5))
+	intrtot7=$((intrend7-intrstart7))
+	intrtot9=$((intrend9-intrstart9))
+	intrtot11=$((intrend11-intrstart11))
+	intrtot13=$((intrend13-intrstart13))
+	intrtot15=$((intrend15-intrstart15))
+	
+	if [ $OUTFILE -eq 1 ]; then
+	    cp np.out "netpipe_data/$2/np_"$MSGL\_$MSGU\_$rxu\_$rxq\_$txq\_$1".log"
+	else
+	    ssh $SERVER cat ~/perf.out
+	    echo $intrtot1",itr1"
+	    echo $intrtot3",itr3"
+	    echo $intrtot5",itr5"
+	    echo $intrtot7",itr7"
+	    echo $intrtot9",itr9"
+	    echo $intrtot11",itr11"
+	    echo $intrtot13",itr13"
+	    echo $intrtot15",itr15"
+	fi
+	sleep 1
+    done
+}
+
 function runRand {
     success=0
     printf "NETPIPE TESTS\n"
@@ -291,6 +354,14 @@ function gatherRand() {
     for iter in `seq 1 1 $NITERS`;
     do	
 	runRand $iter $currdate
+    done
+}
+
+function gatherRandPerf() {
+    echo $currdate
+    for iter in `seq 1 1 $NITERS`;
+    do	
+	runRandPerf $iter $currdate
     done
 }
 
@@ -449,6 +520,14 @@ elif [ "$1" = "gatherRand" ]; then
 	echo "Running $1 RXU=$RXU NPITER=$NPITER RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGL=$MSGL MSGU=$MSGU" > "netpipe_data/$currdate/command.txt"
     fi
     $1
+elif [ "$1" = "gatherRandPerf" ]; then
+    echo "Running $1 RXU=$RXU NPITER=$NPITER RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGL=$MSGL MSGU=$MSGU"
+
+    if [ $OUTFILE -eq 1 ]; then
+	mkdir -p "netpipe_data/$currdate"
+	echo "Running $1 RXU=$RXU NPITER=$NPITER RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGL=$MSGL MSGU=$MSGU" > "netpipe_data/$currdate/command.txt"
+    fi
+    $1
 elif [ "$1" = "gatherRandLimit" ]; then
     echo "Running $1 RXU=$RXU NPITER=$NPITER RXQ=$RXQ TXQ=$TXQ NITERS=$NITERS MSGL=$MSGL MSGU=$MSGU"
 
@@ -470,7 +549,7 @@ else
     echo "unknown command"
 
     while true; do
-    	timeout 30 python netpipe2.py
+    	timeout 30 python3 -u netpipe.py
 	sleep 1
     done
 fi

@@ -53,21 +53,25 @@ def runBench(com):
         return -1.0
 
 def runStatic(msg_size):
+    runRemoteCommand(CSERVER, "taskset -c 1 NPtcp -l "+msg_size+" -u "+msg_size+" -p 0 -r -I")
+    time.sleep(1)
+    tput = runBench("taskset -c 1 NPtcp -h "+CSERVER+" -l "+msg_size+" -u "+msg_size+" -T 2 -p 0 -r -I")
+    time.sleep(0.5)
     runRemoteCommand(CSERVER, "pkill NPtcp")
     time.sleep(0.5)
     runLocalCommand("pkill NPtcp")
     time.sleep(0.5)
-    runRemoteCommand(CSERVER, "taskset -c 1 NPtcp -l "+msg_size+" -u "+msg_size+" -p 0 -r -I")
-    time.sleep(1)
-    tput = runBench("taskset -c 1 NPtcp -h "+CSERVER+" -l "+msg_size+" -u "+msg_size+" -T 2 -p 0 -r -I")
     return tput
 
 sock.send("hi")
 itr = sock.recv()
 if int(itr) > 0 and int(itr) < 202:
+    #itr = 40
     updateITR(itr)
     msg = 10000
     tput = runStatic(str(msg))
+    #print(tput)
     sock.send(str(tput))
 else:
-    sock.send("-99999.99")
+    
+    sock.send(str(abs(int(itr)) * -9999.99))
