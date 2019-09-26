@@ -547,10 +547,22 @@ elif [ "$1" = "ttest" ]; then
     $1
 else
     echo "unknown command"
-
-    while true; do
-    	timeout 30 python3 -u netpipe.py
+    # for a in `seq $BEGIN $INTERVAL $END`
+    for iter in `seq 1 1 5`;
+    do
+	echo "########### " $iter " ###########"
+	#for rxd in `seq 22 2 40`;
+	#do	
+	#timeout 30 python3 -u netpipe.py $rxd
+	#sleep 1
+	#done
+	timeout 30 python3 -u netpipe.py
 	sleep 1
     done
+    #while true; do
+   # 	timeout 30 python3 -u netpipe.py
+    #sleep 1
+    #done
 fi
+
 

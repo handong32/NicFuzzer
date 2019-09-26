@@ -43,8 +43,14 @@ def runLocalCommand(com):
     p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE)
     
 def runRemoteCommand(server, com):
+    #print(com)
     p1 = Popen(["ssh", server, com], stdout=PIPE)
 
+def setITR(v):
+    p1 = Popen(["ssh", CSERVER2, "ethtool -C enp4s0f1 rx-usecs", v], stdout=PIPE, stderr=PIPE)
+    p1.communicate()    
+    time.sleep(0.5)
+    
 def updateNIC():
     global ITR
     global WTHRESH
@@ -67,7 +73,12 @@ def updateNIC():
     '''
     # RSC Delay: The delay = (RSC Delay + 1) x 4 us = 4, 8, 12... 32 us.
     # 3 bits, so [0 - 7]
-    RSC_DELAY = np.random.randint(1, 9)
+    # select 4: 4, 8, 16, 32 | 1, 2, 4, 8
+    RSC_DELAY = np.random.randint(1, 5)
+    if RSC_DELAY == 3:
+        RSC_DELAY=4
+    elif RSC_DELAY == 4:
+        RSC_DELAY = 8
     
     '''
     MAXDESC * SRRCTL.BSIZEPKT must not exceed 64 KB minus one, which is the
@@ -80,8 +91,8 @@ def updateNIC():
     10b = Maximum of 8 descriptors per large receive.
     11b = Maximum of 16 descriptors per large receive
     '''
+    # select 3: 1, 2, 3
     MAX_DESC = np.random.randint(1, 4)
-
 
     '''
     SRRCTL.BSIZEPKT
@@ -93,14 +104,16 @@ def updateNIC():
     *** Linux default is at 3072
     
     MAXDESC * SRRCTL.BSIZEPKT must not exceed 64 KB minus one
-    '''
+
     if MAX_DESC == 1:
-        BSIZEPKT = np.random.randint(3, 16) * 1024
+        BSIZEPKT = 12 * 1024 #np.random.randint(3, 16) * 1024
     elif MAX_DESC == 2:
-        BSIZEPKT = np.random.randint(3, 8) * 1024
+        BSIZEPKT = 6 * 1024#np.random.randint(3, 8) * 1024
     else:
-        BSIZEPKT = np.random.randint(3, 4) * 1024
-        
+        BSIZEPKT = 3 * 1024 #np.random.randint(3, 4) * 1024
+    '''
+    BSIZEPKT = 3 * 1024
+    
     '''
     BSIZEHEADER
 
@@ -109,37 +122,38 @@ def updateNIC():
 
     *** Linux default is set at 0x4 * 64 Bytes = 256 Bytes
     '''
-    # [4, 8, 12, 16] * 64 Bytes
-    BSIZEHDR = np.random.randint(1, 5) * 4 * 64
+    # select 3: [4, 8, 12] * 64 Bytes
+    BSIZEHDR = np.random.randint(1, 4) * 4 * 64
 
     '''
     ITR Interval
     '''
-    # ITR: (RSC_DELAY+2) us to 200 us in increments of 2
-    ITR = np.random.randint((((RSC_DELAY+1) * 4)/2)+1, 101) * 2
+    # ITR: (RSC_DELAY+2) us to 200 us in increments of 10
+    #ITR = np.random.randint((((RSC_DELAY+1) * 4)/2)+1, 101) * 2
+    itr_delay_us = RSC_DELAY*4
+    itr_start = (itr_delay_us/10) + 1
+    #print("itr_start", itr_start)
+    ITR = np.random.randint(itr_start, 16) * 10
     
     '''
     RDLEN
     '''
-    c = np.random.randint(0, 3)
+    c = np.random.randint(0, 2)
     if c == 0:
         RXRING = 512
-    elif c == 1:
-        RXRING = 4092
+        TXRING = 512
     else:
-        RXRING = 8192
+        RXRING = 4092
+        TXRING = 4092
 
     '''
     TDLEN
     '''
-    c = np.random.randint(0, 3)
-    if c == 0:
-        TXRING = 512
-    elif c == 1:
-        TXRING = 4092
-    else:
-        TXRING = 8192
-
+    #c = np.random.randint(0, 2)
+    #if c == 0:
+    #    TXRING = 512
+    #else:
+    #    TXRING = 4092
     
     '''
     Notes about THRESH, PTHRESH, WTHRESH
@@ -152,7 +166,7 @@ def updateNIC():
     In order to minimize PCIe overhead the PTHRESH should be set as low as possible
     while HTHRESH and WTHRESH should be set as high as possible.
 
-    The sum of PTHRESH plus WTHRESH must not be greater than the on-chip descriptor
+    The sum of PTHRESH plus WTHRESH must not be greater than the onchip descriptor
     buffer size (40)
 
     When the WTHRESH equals zero, descriptors are written back for those
@@ -161,7 +175,7 @@ def updateNIC():
     the WTHRESH value, then these descriptors are written back. Accumulated
     descriptor write back enables better use of the PCIe bus and memory bandwidth.
 
-    PTHRESH: Pre-Fetch Threshold The on-chip descriptor buffer becomes almost empty while there are enough
+    PTHRESH: Pre Fetch Threshold The on chip descriptor buffer becomes almost empty while there are enough
     descriptors in the host memory.
          - The on-chip descriptor buffer is defined as almost empty if it contains less descriptors
            then the threshold defined by PTHRESH
@@ -177,6 +191,7 @@ def updateNIC():
 
     # [2, 40) in increments of 2
     # WTHRESH: Should not be higher than 1 when ITR == 0, else device basically crashes
+    '''
     WTHRESH = np.random.randint(1, 20)
     
     #PTHRESH: WTHRESH + PTHRESH < 40
@@ -188,6 +203,56 @@ def updateNIC():
     WTHRESH *= 2
     PTHRESH *= 2
     HTHRESH *= 2
+    '''
+    '''
+    In order to reduce transmission latency, it is recommended to set the PTHRESH value
+    as high as possible while the HTHRESH and WTHRESH as low as possible (down to
+    zero).
+
+    In order to minimize PCIe overhead the PTHRESH should be set as low as possible
+    while HTHRESH and WTHRESH should be set as high as possible.
+
+    The sum of PTHRESH plus WTHRESH must not be greater than the on chip descriptor
+    buffer size (40)
+    '''
+    threshc = np.random.randint(0, 3)
+
+    if threshc == 0:
+        '''
+        CPU cache line optimization Assume  N equals the CPU cache line divided by 16 descriptor size.
+        Then in order to align descriptors prefetch to CPU cache line in most cases it is advised to
+        set PTHRESH to the onchip descriptor buffer size minus N and HTHRESH to N. In order to align 
+        descriptor write back to the CPU cache line it is advised to set WTHRESH to either N or even 2 times N.
+        Note that partial cache line writes might significantly degrade performance. Therefore, it is highly recommended to follow this advice.
+        
+        getconf LEVEL1_DCACHE_LINESIZE == CPU cache line size 64
+        on chip descriptor size == 16
+        
+        N = 64 / 16 = 4
+        PTHRESH = 16 4 == 12
+        HTHRESH == 4
+        WTHRESH == 4 or 8
+        '''
+
+        PTHRESH = 12
+        HTHRESH = 4
+        WTHRESH = 4
+    elif threshc == 1:
+        '''
+        Minimizing PCIe overhead: As an example, setting PTHRESH to the on-chip descriptor buffer size minus 16 and HTHRESH to 16 
+        minimizes the PCIe request and header overhead to 20% of the bandwidth required for the descriptor fetch.
+        '''
+        PTHRESH = 0
+        HTHRESH = 16
+        WTHRESH = 16
+    elif threshc == 2:
+        '''
+        Minimizing transmission latency from tail update: Setting PTHRESH to the on chip 
+        descriptor buffer size minus N, previously defined, while HTHRESH and WTHRESH to zero.
+        '''
+        PTHRESH = 12
+        HTHRESH = 0
+        WTHRESH = 0
     
     '''
     DTXMXSZRQ
@@ -198,16 +263,13 @@ def updateNIC():
     min: 0x10 * 256 = 4 KB
     max: 0xFFF * 256 = 1 MB
     '''
-    c = np.random.randint(0, 5)
+    c = np.random.randint(0, 3)
     if c == 0:
+        # default
         DTXMXSZRQ = 16
     elif c == 1:
-        DTXMXSZRQ = 1023
-    elif c == 2:
         DTXMXSZRQ = 2046
-    elif c == 3:
-        DTXMXSZRQ = 3069
-    elif c == 4:
+    elif c == 2:
         # 0xFFF
         DTXMXSZRQ = 4095
 
@@ -217,7 +279,14 @@ def updateNIC():
     DCA == 3, RX_DCA = OFF, TX_DCA = ON
     DCA == 4, RX_DCA = ON, TX_DCA = ON
     '''
-    DCA = np.random.randint(1,5)
+    dcac = np.random.randint(0, 2)
+    if dcac == 0:
+        DCA = 1
+    else:
+        DCA = 4
+
+    #print("RSC_DELAY=%d MAX_DESC=%d BSIZEPKT=%d BSIZEHDR=%d RXRING=%d TXRING=%d ITR=%d DTXMXSZRQ=%d WTHRESH=%d PTHRESH=%d HTHRESH=%d DCA=%d\n" % (RSC_DELAY, MAX_DESC, BSIZEPKT, BSIZEHDR, RXRING, TXRING, ITR, DTXMXSZRQ, WTHRESH, PTHRESH, HTHRESH, DCA))
+    #return
 
     # RSC_DELAY
     p1 = Popen(["ssh", CSERVER2, "ethtool -C enp4s0f1 RSCDELAY", str(RSC_DELAY)], stdout=PIPE, stderr=PIPE)
@@ -264,8 +333,6 @@ def updateNIC():
     p1 = Popen(["ssh", CSERVER2, "ethtool -C enp4s0f1 DCA", str(DCA)], stdout=PIPE, stderr=PIPE)
     p1.communicate()
     
-    #print("RSC_DELAY=%d MAX_DESC=%d BSIZEPKT=%d BSIZEHDR=%d RXRING=%d TXRING=%d ITR=%d DTXMXSZRQ=%d WTHRESH=%d PTHRESH=%d HTHRESH=%d DCA=%d\n" % (RSC_DELAY, MAX_DESC, BSIZEPKT, BSIZEHDR, RXRING, TXRING, ITR, DTXMXSZRQ, WTHRESH, PTHRESH, HTHRESH, DCA))
-
     p1 = Popen(["ssh", CSERVER2, "ifdown enp4s0f1"], stdout=PIPE, stderr=PIPE)
     p1.communicate()
     time.sleep(1)
@@ -273,6 +340,9 @@ def updateNIC():
     p1 = Popen(["ssh", CSERVER2, "ifup enp4s0f1"], stdout=PIPE, stderr=PIPE)
     p1.communicate()
     time.sleep(1)
+
+    print("RSC_DELAY=%d MAX_DESC=%d BSIZEPKT=%d BSIZEHDR=%d RXRING=%d TXRING=%d ITR=%d DTXMXSZRQ=%d WTHRESH=%d PTHRESH=%d HTHRESH=%d DCA=%d\n" % (RSC_DELAY, MAX_DESC, BSIZEPKT, BSIZEHDR, RXRING, TXRING, ITR, DTXMXSZRQ, WTHRESH, PTHRESH, HTHRESH, DCA))
+    
     for i in range(5):
         p1 = Popen(["ping", "-c 3", CSERVER], stdout=PIPE)
         output = p1.communicate()[0]
@@ -289,13 +359,9 @@ def updateNIC():
 
 def runBench(com):
     p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE, stderr=PIPE)
-    #time.sleep(1)
     stdout, stderr = p1.communicate()
-    #print(len(stdout))
-    #print(stdout)
-    #print("")
-    #print(len(stderr))
-    #print(stderr)
+    print(stdout)
+    print(stderr)
     if 'Mbps' in str(stderr):
         s = str(stderr).strip().split('-->')[1]
         t = s.split('Mbps')[0]
@@ -344,7 +410,54 @@ def runStatic(msg_size):
     else:
         return tput,0,0,0,0,0
 
-#print(updateNIC())
+def runRand(msgl, msgu, niters):
+    runRemoteCommand(CSERVER, "pkill NPtcp")
+    time.sleep(0.5)
+    runLocalCommand("pkill NPtcp")
+    time.sleep(0.5)
+    itrstart = runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-1 | tr -s ' ' | cut -d ' ' -f 4")
+    runRemoteCommand (CSERVER2, "perf stat -C 1 -D 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ taskset -c 1 NPtcp -l "+msgl+" -u "+msgu+" -p 0 -r -I -x")
+    time.sleep(1)
+    tput = runBench("taskset -c 1 NPtcp -h "+CSERVER+" -l "+msgl+" -u "+msgu+" -n "+ niters  +" -p 0 -r -I -x")
+    if tput > 0:
+        itrend = runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-1 | tr -s ' ' | cut -d ' ' -f 4")
+        time.sleep(0.5)
+        output = runRemoteCommandGet(CSERVER2, "cat perf.out")
+        nins = 0
+        ncycles = 0
+        cache_misses = 0
+        joules = 0
+        ttime = 0.0
+        watts = -1
+        for l in str(output).split("\\n"):
+            print(l.strip())
+            f = list(filter(None, l.strip().split(' ')))
+            if 'cycles' in l:
+                ncycles = float(f[0].replace(',', ''))
+            if 'instructions' in l:
+                nins = float(f[0].replace(',', ''))
+            if 'LLC' in l:
+                cache_misses += float(f[0].replace(',', ''))
+            if 'Joules' in l:
+                joules += float(f[0])
+            if 'seconds' in l:
+                ttime = float(f[0])
+        watts = joules/ttime
+        return tput,nins,ncycles,watts,cache_misses,ttime,int(itrend)-int(itrstart)
+    else:
+        return tput,0,0,0,0,0,0
+
+'''
+if len(sys.argv) == 2:
+    setITR(sys.argv[1])
+    tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(24576), str(20000))
+    ##tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(524288), str(4000))
+    print("ITR=%d TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d TIME(s)=%f" % (int(sys.argv[1]), tput, int(nins), int(ncycles), int(cache_misses), watts, nitr, ttime))
+else:
+    tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(24576), str(20000))
+    #tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(524288), str(4000))
+    print("DefaultLinux=1 TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d TIME(s)=%f" % (tput, int(nins), int(ncycles), int(cache_misses), watts, nitr, ttime))
+''' 
 '''
 if updateNIC() == 1:
     npu = np.random.random_sample()
@@ -374,8 +487,10 @@ msg = np.random.randint(500, 20000)
     #print("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % (msg, ITR/2, DTXMXSZRQ, WTHRESH, PTHRESH, HTHRESH, int(tput), int(nins), int(ncycles), int(cache_misses), int(watts), nitr))
 '''
 
-#msg = np.random.randint(500, 20000)
-msg = 10000
-tput,nins,ncycles,watts,cache_misses,nitr = runStatic(str(msg))
-print("TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d" % (tput, int(nins), int(ncycles), int(cache_misses), watts, nitr))
+if updateNIC() == 1:
+    tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(24576), str(10000))
+    ##tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(524288), str(4000))
+    print("TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d TIME(s)=%f" % (tput, int(nins), int(ncycles), int(cache_misses), watts, nitr, ttime))
+    #tput,nins,ncycles,watts,cache_misses,nitr = runStatic(str(msg))
+    #print("TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d" % (tput, int(nins), int(ncycles), int(cache_misses), watts, nitr))
 

@@ -9,21 +9,33 @@ export OUTFILE=${OUTFILE:=0}
 
 currdate=`date +%m_%d_%Y_%H_%M_%S`
 
+function run2
+{
+    ssh $SERVER "pkill memcached"
+    pkill mutilate
+    sleep 1
+    python -u mutilate_bench.py
+}
+
 function run
 {
     if [ $OUTFILE -eq 1 ]; then
+	echo $currdate
 	mkdir -p "mcd_data/$currdate"
 	echo "Running $1 RXU=$RXU NITERS=$NITERS" > "mcd_data/$currdate/command.txt"
     fi
 
-    for iter in `seq 1 1 $NITERS`;
+    for iter in `seq 2 1 $NITERS`;
     do
-	#for rxu in `seq 0 2 150`;
-	for rxu in `seq 0 2 1`;
+	for rxu in $RXU;
 	do
-	    #ssh $SERVER "ethtool -C enp4s0f1 rx-usecs $rxu"
+	    echo $rxu
+	    ssh $SERVER "ethtool -C enp4s0f1 rx-usecs $rxu"
+	    sleep 0.2
+	    
 	    ssh $SERVER "pkill memcached"
 	    pkill mutilate
+	    sleep 1
 	    echo "**** ITER="$iter "RXU="$rxu
 	    intrstart1=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-1" | tr -s ' ' | cut -d ' ' -f 4 )
 	    intrstart3=$(ssh $SERVER cat /proc/interrupts | grep -m 1 "enp4s0f1-TxRx-3" | tr -s ' ' | cut -d ' ' -f 6 )
