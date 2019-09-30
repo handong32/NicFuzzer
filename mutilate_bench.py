@@ -14,7 +14,7 @@ import argparse
 MASTER = "192.168.1.200"
 CSERVER = "192.168.1.200"
 CSERVER2 = "10.255.5.8"
-ITR = 0
+ITR = 666
 WTHRESH = 0
 PTHRESH = 0
 HTHRESH = 0
@@ -48,6 +48,13 @@ def runRemoteCommand(com):
 def runRemoteCommandGet(server, com):
     p1 = Popen(["ssh", server, com], stdout=PIPE)
     return p1.communicate()[0].strip()
+
+def setITR(v):
+    global ITR
+    p1 = Popen(["ssh", CSERVER2, "ethtool -C enp4s0f1 rx-usecs", v], stdout=PIPE, stderr=PIPE)
+    p1.communicate()    
+    time.sleep(0.5)
+    ITR = int(v)
 
 def updateNIC():
     global ITR
@@ -393,15 +400,40 @@ def runMutilateStats(com):
         return -1.0
     
 def runBenchStats():
+    sitr1 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-1 | tr -s ' ' | cut -d ' ' -f 4"))
+    sitr3 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-3 | tr -s ' ' | cut -d ' ' -f 6"))
+    sitr5 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-5 | tr -s ' ' | cut -d ' ' -f 8"))
+    sitr7 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-7 | tr -s ' ' | cut -d ' ' -f 10"))
+    sitr9 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-9 | tr -s ' ' | cut -d ' ' -f 12"))
+    sitr11 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-11 | tr -s ' ' | cut -d ' ' -f 14"))
+    sitr13 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-13 | tr -s ' ' | cut -d ' ' -f 16"))
+    sitr15 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-15 | tr -s ' ' | cut -d ' ' -f 18"))
     runRemoteCommand("chrt -r 1 perf stat -C 1,3,5,7,9,11,13,15 -D 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ numactl --cpunodebind=1 --membind=1 memcached -u nobody -t 8 -m 16G -l "+MASTER+" -B binary")
     time.sleep(1)
     runLocalCommandOut("taskset -c 1 mutilate --binary -s "+MASTER+" --loadonly -K fb_key -V fb_value")
     runLocalCommand("taskset -c 3,5,7,9,11,13,15 mutilate -A --affinity -T 7")
     time.sleep(1)
-    qps = runMutilateStats("taskset -c 1 mutilate --binary -B -s "+MASTER+" --noload -a localhost -K fb_key -V fb_value -i fb_ia -u 0.25 -c 8 -d 4 -C 8 --search=99:1000 -t 30")
+    qps = runMutilateStats("taskset -c 1 mutilate --binary -B -s "+MASTER+" --noload -a localhost -K fb_key -V fb_value -i fb_ia -u 0.25 -c 8 -d 4 -C 8 --search=99:500 -t 30")
     runRemoteCommandOut("pkill memcached")
     if qps > 0.0:
         time.sleep(0.1)
+        eitr1 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-1 | tr -s ' ' | cut -d ' ' -f 4"))
+        eitr3 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-3 | tr -s ' ' | cut -d ' ' -f 6"))
+        eitr5 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-5 | tr -s ' ' | cut -d ' ' -f 8"))
+        eitr7 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-7 | tr -s ' ' | cut -d ' ' -f 10"))
+        eitr9 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-9 | tr -s ' ' | cut -d ' ' -f 12"))
+        eitr11 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-11 | tr -s ' ' | cut -d ' ' -f 14"))
+        eitr13 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-13 | tr -s ' ' | cut -d ' ' -f 16"))
+        eitr15 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-15 | tr -s ' ' | cut -d ' ' -f 18"))
+        itr1 = eitr1 - sitr1
+        itr3 = eitr3 - sitr3
+        itr5 = eitr5 - sitr5
+        itr7 = eitr7 - sitr7
+        itr9 = eitr9 - sitr9
+        itr11 = eitr11 - sitr11
+        itr13 = eitr13 - sitr13
+        itr15 = eitr15 - sitr15
+        
         output = runRemoteCommandGet(MASTER, "cat perf.out")
         cycles = 0
         instructions = 0
@@ -427,8 +459,25 @@ def runBenchStats():
                 energy_ram = float(f[0].replace(',', ''))
             if 'seconds' in l:
                 ttime = float(f[0].replace(',', ''))
-        print("RSC_DELAY=%d MAX_DESC=%d BSIZEHDR=%d RXRING=%d TXRING=%d ITR=%d DTXMXSZRQ=%d THRESHC=%d DCA=%d QPS=%.2f CYCLES=%d INSTRUCTIONS=%d LLC_LOAD_MISSES=%d LLC_STORE_MISSES=%d NRG_PKG=%.2f NRG_RAM=%.2f TIME=%.2f" % (RSC_DELAY, MAX_DESC, BSIZEHDR, RXRING, TXRING, ITR, DTXMXSZRQ, THRESHC, DCA, qps, cycles, instructions, llc_load, llc_store, energy_pkg, energy_ram, ttime))
+        print("RSC_DELAY=%d MAX_DESC=%d BSIZEHDR=%d RXRING=%d TXRING=%d ITR=%d DTXMXSZRQ=%d THRESHC=%d DCA=%d QPS=%.2f CYCLES=%d INSTRUCTIONS=%d LLC_LOAD_MISSES=%d LLC_STORE_MISSES=%d NRG_PKG=%.2f NRG_RAM=%.2f TIME=%.2f ITR1=%d ITR3=%d ITR5=%d ITR7=%d ITR9=%d ITR11=%d ITR13=%d ITR15=%d" % (RSC_DELAY, MAX_DESC, BSIZEHDR, RXRING, TXRING, ITR, DTXMXSZRQ, THRESHC, DCA, qps, cycles, instructions, llc_load, llc_store, energy_pkg, energy_ram, ttime, itr1, itr3, itr5, itr7, itr9, itr11, itr13, itr15))
         
 if __name__ == '__main__':
-    if updateNIC() == 1:
+    if len(sys.argv) == 2:
+        setITR(sys.argv[1])
         runBenchStats()
+    else:
+        runBenchStats()
+        #if updateNIC() == 1:
+        #    runBenchStats()
+
+'''        
+if len(sys.argv) == 2:
+    setITR(sys.argv[1])
+    tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(24576), str(20000))
+    ##tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(524288), str(4000))
+    print("ITR=%d TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d TIME(s)=%f" % (int(sys.argv[1]), tput, int(nins), int(ncycles), int(cache_misses), watts, nitr, ttime))
+else:
+    tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(24576), str(20000))
+    #tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(524288), str(4000))
+    print("DefaultLinux=1 TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d TIME(s)=%f" % (tput, int(nins), int(ncycles), int(cache_misses), watts, nitr, ttime))
+'''

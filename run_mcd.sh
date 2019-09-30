@@ -9,6 +9,28 @@ export OUTFILE=${OUTFILE:=0}
 
 currdate=`date +%m_%d_%Y_%H_%M_%S`
 
+function run5
+{
+    for i in `seq 1 1 $NITERS`;
+    do
+	for d in $RXU;
+	do
+	    ssh $SERVER "pkill memcached"
+	    pkill mutilate
+	    sleep 1
+	    timeout 600 python3 -u mutilate_bench.py $d
+	done
+    done
+}
+
+function run4
+{
+    ssh $SERVER "pkill memcached"
+    pkill mutilate
+    sleep 1
+    timeout 600 python3 -u mutilate_bench.py $1
+}
+
 function run3
 {
     while true; do
@@ -92,4 +114,4 @@ function run
     done
 }
 
-$1
+$1 $2
