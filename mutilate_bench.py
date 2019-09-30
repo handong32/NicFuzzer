@@ -379,12 +379,17 @@ def runMutilateStats(com):
     try:
         p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE)
         output = p1.communicate()[0].strip()
-        for line in output.strip().split("\n"):
-            if "Peak" in line:
-                qps = float((line.split("=")[1]).strip())
-                return qps
-    except:
-        print("An error occurred in runMutilateStats")
+        #print(len(output), output)
+        if len(output) > 10:
+            for line in str(output).strip().split("\\n"):
+                #print(line.strip())
+                if "Peak" in line:
+                    qps = float((line.split("=")[1]).strip())
+                    return qps
+        else:
+            return -1.0
+    except Exception as e:
+        print("An error occurred in runMutilateStats ", type(e), e)
         return -1.0
     
 def runBenchStats():
@@ -395,7 +400,7 @@ def runBenchStats():
     time.sleep(1)
     qps = runMutilateStats("taskset -c 1 mutilate --binary -B -s "+MASTER+" --noload -a localhost -K fb_key -V fb_value -i fb_ia -u 0.25 -c 8 -d 4 -C 8 --search=99:1000 -t 30")
     runRemoteCommandOut("pkill memcached")
-    if qps > 0:
+    if qps > 0.0:
         time.sleep(0.1)
         output = runRemoteCommandGet(MASTER, "cat perf.out")
         cycles = 0
@@ -405,7 +410,7 @@ def runBenchStats():
         energy_pkg = 0.0
         energy_ram = 0.0
         ttime = 0.0
-        for l in str(output).split("\n"):
+        for l in str(output).split("\\n"):
             #print(l.strip())
             f = list(filter(None, l.strip().split(' ')))
             if 'cycles' in l:
@@ -423,10 +428,7 @@ def runBenchStats():
             if 'seconds' in l:
                 ttime = float(f[0].replace(',', ''))
         print("RSC_DELAY=%d MAX_DESC=%d BSIZEHDR=%d RXRING=%d TXRING=%d ITR=%d DTXMXSZRQ=%d THRESHC=%d DCA=%d QPS=%.2f CYCLES=%d INSTRUCTIONS=%d LLC_LOAD_MISSES=%d LLC_STORE_MISSES=%d NRG_PKG=%.2f NRG_RAM=%.2f TIME=%.2f" % (RSC_DELAY, MAX_DESC, BSIZEHDR, RXRING, TXRING, ITR, DTXMXSZRQ, THRESHC, DCA, qps, cycles, instructions, llc_load, llc_store, energy_pkg, energy_ram, ttime))
-
-    #print("RSC_DELAY=%d MAX_DESC=%d BSIZEPKT=%d BSIZEHDR=%d RXRING=%d TXRING=%d ITR=%d DTXMXSZRQ=%d WTHRESH=%d PTHRESH=%d THRESH=%d DCA=%d QPS=%.2f CYCLES=%d INSTRUCTIONS=%d LLC_LOAD_MISSES=%d LLC_STORE_MISSES=%d NRG_PKG=%.2f NRG_RAM=%.2f TIME=%.2f" % (RSC_DELAY, MAX_DESC, BSIZEPKT, BSIZEHDR, RXRING, TXRING, ITR, DTXMXSZRQ, WTHRESH, PTHRESH, HTHRESH, DCA, qps, cycles, instructions, llc_load, llc_store, energy_pkg, energy_ram, ttime))
         
 if __name__ == '__main__':
-    #runBench()
     if updateNIC() == 1:
         runBenchStats()

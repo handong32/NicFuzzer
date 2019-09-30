@@ -9,12 +9,23 @@ export OUTFILE=${OUTFILE:=0}
 
 currdate=`date +%m_%d_%Y_%H_%M_%S`
 
+function run3
+{
+    while true; do
+	ssh $SERVER "pkill memcached"
+	pkill mutilate
+	sleep 1
+	timeout 600 python3 -u mutilate_bench.py
+	sleep 1
+    done
+}
+
 function run2
 {
     ssh $SERVER "pkill memcached"
     pkill mutilate
     sleep 1
-    python -u mutilate_bench.py
+    timeout 600 python3 -u mutilate_bench.py
 }
 
 function run
