@@ -18,7 +18,7 @@ function run5
 	    ssh $SERVER "pkill memcached"
 	    pkill mutilate
 	    sleep 1
-	    timeout 600 python3 -u mutilate_bench.py $d
+	    timeout 90 python3 -u mutilate_bench.py $d
 	done
     done
 }
@@ -28,7 +28,7 @@ function run4
     ssh $SERVER "pkill memcached"
     pkill mutilate
     sleep 1
-    timeout 600 python3 -u mutilate_bench.py $1
+    timeout 90 python3 -u mutilate_bench.py $1
 }
 
 function run3
@@ -37,7 +37,7 @@ function run3
 	ssh $SERVER "pkill memcached"
 	pkill mutilate
 	sleep 1
-	timeout 600 python3 -u mutilate_bench.py
+	timeout 90 python3 -u mutilate_bench.py
 	sleep 1
     done
 }
@@ -47,7 +47,7 @@ function run2
     ssh $SERVER "pkill memcached"
     pkill mutilate
     sleep 1
-    timeout 600 python3 -u mutilate_bench.py
+    timeout 90 python3 -u mutilate_bench.py
 }
 
 function run

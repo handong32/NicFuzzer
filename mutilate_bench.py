@@ -408,12 +408,16 @@ def runBenchStats():
     sitr11 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-11 | tr -s ' ' | cut -d ' ' -f 14"))
     sitr13 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-13 | tr -s ' ' | cut -d ' ' -f 16"))
     sitr15 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-15 | tr -s ' ' | cut -d ' ' -f 18"))
+    #runRemoteCommand("chrt -r 1 perf stat -C 1,3,5,7,9,11,13,15 -D 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ numactl --cpunodebind=1 --membind=1 memcached -u nobody -t 8 -m 16G -l "+MASTER+" -B binary")
     runRemoteCommand("chrt -r 1 perf stat -C 1,3,5,7,9,11,13,15 -D 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ numactl --cpunodebind=1 --membind=1 memcached -u nobody -t 8 -m 16G -l "+MASTER+" -B binary")
     time.sleep(1)
     runLocalCommandOut("taskset -c 1 mutilate --binary -s "+MASTER+" --loadonly -K fb_key -V fb_value")
+    #runLocalCommandOut("taskset -c 1 mutilate --binary -s "+MASTER+" --loadonly --keysize=19 --valuesize=2")
     runLocalCommand("taskset -c 3,5,7,9,11,13,15 mutilate -A --affinity -T 7")
     time.sleep(1)
     qps = runMutilateStats("taskset -c 1 mutilate --binary -B -s "+MASTER+" --noload -a localhost -K fb_key -V fb_value -i fb_ia -u 0.25 -c 8 -d 4 -C 8 --search=99:500 -t 30")
+    #qps = runMutilateStats("taskset -c 1 mutilate --binary -B -s "+MASTER+" --noload -a localhost -K fb_key -V fb_value -i fb_ia -u 0.25 -c 14 -d 7 -C 14 --search=99:1000 -t 30")
+    #qps = runMutilateStats("taskset -c 1 mutilate --binary -B -s "+MASTER+" --noload -a localhost  --keysize=19 --valuesize=2 -u 0.002 -c 8 -d 4 -C 8 --search=99:500 -t 30")
     runRemoteCommandOut("pkill memcached")
     if qps > 0.0:
         time.sleep(0.1)
@@ -442,6 +446,9 @@ def runBenchStats():
         energy_pkg = 0.0
         energy_ram = 0.0
         ttime = 0.0
+        watts = 0.0
+        ipc = 0.0
+        avg_itr = 0.0
         for l in str(output).split("\\n"):
             #print(l.strip())
             f = list(filter(None, l.strip().split(' ')))
@@ -459,16 +466,19 @@ def runBenchStats():
                 energy_ram = float(f[0].replace(',', ''))
             if 'seconds' in l:
                 ttime = float(f[0].replace(',', ''))
-        print("RSC_DELAY=%d MAX_DESC=%d BSIZEHDR=%d RXRING=%d TXRING=%d ITR=%d DTXMXSZRQ=%d THRESHC=%d DCA=%d QPS=%.2f CYCLES=%d INSTRUCTIONS=%d LLC_LOAD_MISSES=%d LLC_STORE_MISSES=%d NRG_PKG=%.2f NRG_RAM=%.2f TIME=%.2f ITR1=%d ITR3=%d ITR5=%d ITR7=%d ITR9=%d ITR11=%d ITR13=%d ITR15=%d" % (RSC_DELAY, MAX_DESC, BSIZEHDR, RXRING, TXRING, ITR, DTXMXSZRQ, THRESHC, DCA, qps, cycles, instructions, llc_load, llc_store, energy_pkg, energy_ram, ttime, itr1, itr3, itr5, itr7, itr9, itr11, itr13, itr15))
-        
+        watts = (energy_pkg+energy_ram)/ttime
+        ipc = instructions/float(cycles)
+        avg_itr = (itr1+itr3+itr5+itr7+itr9+itr11+itr13+itr15) / 8.0
+        print("RSC_DELAY=%d MAX_DESC=%d BSIZEHDR=%d RXRING=%d TXRING=%d ITR=%d DTXMXSZRQ=%d THRESHC=%d DCA=%d QPS=%.2f CYCLES=%d INSTRUCTIONS=%d LLC_LOAD_MISSES=%d LLC_STORE_MISSES=%d NRG_PKG=%.2f NRG_RAM=%.2f TIME=%.2f ITR1=%d ITR3=%d ITR5=%d ITR7=%d ITR9=%d ITR11=%d ITR13=%d ITR15=%d WATTS=%.2f QPS/WATT=%.2f LLC_MISSES=%d IPC=%.5f AVG_ITR_PER_CORE=%.2f" % (RSC_DELAY, MAX_DESC, BSIZEHDR, RXRING, TXRING, ITR, DTXMXSZRQ, THRESHC, DCA, qps, cycles, instructions, llc_load, llc_store, energy_pkg, energy_ram, ttime, itr1, itr3, itr5, itr7, itr9, itr11, itr13, itr15, watts, qps/watts, llc_load+llc_store, ipc, avg_itr))
+        #print("WATTS=%.2f" % ((energy_pkg+energy_ram) / ttime))
 if __name__ == '__main__':
     if len(sys.argv) == 2:
         setITR(sys.argv[1])
         runBenchStats()
     else:
-        runBenchStats()
-        #if updateNIC() == 1:
-        #    runBenchStats()
+        #runBenchStats()
+        if updateNIC() == 1:
+            runBenchStats()
 
 '''        
 if len(sys.argv) == 2:
