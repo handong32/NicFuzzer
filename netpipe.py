@@ -127,6 +127,31 @@ def updateNIC():
 
     '''
     ITR Interval
+
+    Time-based interrupt throttling is useful to limit the maximum interrupt rate regardless
+    of network traffic conditions.
+
+    The minimum inter-interrupt interval is
+    specified in 2 us units (at 1 Gb/s or 10 Gb/s link). When the ITR Interval equals zero,
+    interrupt throttling is disabled and any event causes an immediate interrupt. The
+    field is composed of nine bits enabling a range of 2 us up to 1024 us. These ITR
+    interval times correspond to interrupt rates in the range of 500 K INT/sec to 980 INT/ sec.
+    The minimum inter interrupt interval is specified in 2 us units (at 1 Gb/s or 10 Gb/s link). 
+    When the ITR Interval equals zero, interrupt throttling is disabled and any event causes an immediate interrupt. 
+    The field is composed of nine bits enabling a range of 2 us up to 1024 us. These ITR
+    interval times correspond to interrupt rates in the range of 500 K INT/sec to 980 INT/
+    sec.
+
+    If an event happens before the counter is zero, it sets the EICR. The interrupt can
+    be asserted only when the ITR time expires (counter is zero).
+
+    Else (no events during the entire ITR interval), the EICR register is not set and
+    the interrupt is not asserted on ITR expiration. The next event sets the EICR bit
+    and generates an immediate interrupt.
+
+    Once the interrupt is asserted, the ITR counter is loaded by the ITR interval and
+    the entire cycle re-starts. The next interrupt can be generated only after the ITR
+    counter expires once again.
     '''
     # ITR: (RSC_DELAY+2) us to 200 us in increments of 10
     #ITR = np.random.randint((((RSC_DELAY+1) * 4)/2)+1, 101) * 2

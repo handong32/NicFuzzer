@@ -476,9 +476,9 @@ if __name__ == '__main__':
         setITR(sys.argv[1])
         runBenchStats()
     else:
-        #runBenchStats()
-        if updateNIC() == 1:
-            runBenchStats()
+        runBenchStats()
+        #if updateNIC() == 1:
+        #    runBenchStats()
 
 '''        
 if len(sys.argv) == 2:
