@@ -27,25 +27,39 @@ BSIZEPKT = 0
 BSIZEHDR = 0
 RXRING = 0
 TXRING = 0
+RAPL = 135
 
+WORKLOADS = {                                                                                                            
+  'etc': '--keysize=fb_key --valuesize=fb_value --iadist=fb_ia --update=0.033',                                          
+  'usr': '--keysize=19 --valuesize=2 --update=0.002',                                                                    
+}
 
 def runLocalCommandOut(com):
+    #print(com)
     p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE)
     p1.communicate()
     #print("\t"+com, "->\n", p1.communicate()[0].strip())
     
 def runRemoteCommandOut(com):
+    #print(com)
     p1 = Popen(["ssh", MASTER, com], stdout=PIPE)
     p1.communicate()
     #print("\tssh "+MASTER, com, "->\n", p1.communicate()[0].strip())
 
 def runLocalCommand(com):
+    #print(com)
     p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE)
     
 def runRemoteCommand(com):
-    p1 = Popen(["ssh", MASTER, com], stdout=PIPE)        
+    #print(com)
+    p1 = Popen(["ssh", MASTER, com])
+
+def runRemoteCommands(com, server):
+    #print(com)
+    p1 = Popen(["ssh", server, com])
 
 def runRemoteCommandGet(server, com):
+    #print(com)
     p1 = Popen(["ssh", server, com], stdout=PIPE)
     return p1.communicate()[0].strip()
 
@@ -56,6 +70,13 @@ def setITR(v):
     time.sleep(0.5)
     ITR = int(v)
 
+def setRAPL(v):
+    global RAPL
+    p1 = Popen(["ssh", CSERVER2, "~/uarch-configure/rapl-read/rapl-power-mod", v], stdout=PIPE, stderr=PIPE)
+    p1.communicate()
+    time.sleep(0.5)
+    RAPL = int(v)
+    
 def updateNIC():
     global ITR
     global WTHRESH
@@ -382,24 +403,7 @@ def runBench():
     runMutilate("taskset -c 1 mutilate --binary -B -s "+MASTER+" --noload -a localhost -K fb_key -V fb_value -i fb_ia -u 0.25 -c 8 -d 4 -C 8 --search=99:500 -t 30")
     runRemoteCommandOut("pkill memcached")
 
-def runMutilateStats(com):
-    try:
-        p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE)
-        output = p1.communicate()[0].strip()
-        #print(len(output), output)
-        if len(output) > 10:
-            for line in str(output).strip().split("\\n"):
-                #print(line.strip())
-                if "Peak" in line:
-                    qps = float((line.split("=")[1]).strip())
-                    return qps
-        else:
-            return -1.0
-    except Exception as e:
-        print("An error occurred in runMutilateStats ", type(e), e)
-        return -1.0
-    
-def runBenchStats():
+def runBenchSearch():
     sitr1 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-1 | tr -s ' ' | cut -d ' ' -f 4"))
     sitr3 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-3 | tr -s ' ' | cut -d ' ' -f 6"))
     sitr5 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-5 | tr -s ' ' | cut -d ' ' -f 8"))
@@ -408,14 +412,21 @@ def runBenchStats():
     sitr11 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-11 | tr -s ' ' | cut -d ' ' -f 14"))
     sitr13 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-13 | tr -s ' ' | cut -d ' ' -f 16"))
     sitr15 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-15 | tr -s ' ' | cut -d ' ' -f 18"))
-    #runRemoteCommand("chrt -r 1 perf stat -C 1,3,5,7,9,11,13,15 -D 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ numactl --cpunodebind=1 --membind=1 memcached -u nobody -t 8 -m 16G -l "+MASTER+" -B binary")
-    runRemoteCommand("chrt -r 1 perf stat -C 1,3,5,7,9,11,13,15 -D 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ numactl --cpunodebind=1 --membind=1 memcached -u nobody -t 8 -m 16G -l "+MASTER+" -B binary")
+    runLocalCommand("taskset -c 3,5,7,9,11,13,15 /root/tmp/mutilate/mutilate --agentmode --affinity --threads 7")
     time.sleep(1)
-    runLocalCommandOut("taskset -c 1 mutilate --binary -s "+MASTER+" --loadonly -K fb_key -V fb_value")
+    runRemoteCommands("/root/tmp/mutilate/mutilate --agentmode --affinity --threads 16", "192.168.1.201")
+    time.sleep(1)
+    runRemoteCommands("/root/tmp/mutilate/mutilate --agentmode --affinity --threads 16", "192.168.1.202")
+    time.sleep(1)
+    runRemoteCommands("/root/tmp/mutilate/mutilate --agentmode --affinity --threads 16", "192.168.1.30")
+    time.sleep(1)
+    runRemoteCommand("chrt -r 1 perf stat -C 1,3,5,7,9,11,13,15 -D 1000 -I 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ numactl --cpunodebind=1 --membind=1 memcached -u nobody -t 8 -m 16G -c 4096 -o hashpower=20 -b 8192 -l "+MASTER+" -B binary")
+    time.sleep(1)
+    runLocalCommandOut("taskset -c 1 mutilate --binary -s "+MASTER+" --loadonly --records=1000000 -K fb_key -V fb_value")
     #runLocalCommandOut("taskset -c 1 mutilate --binary -s "+MASTER+" --loadonly --keysize=19 --valuesize=2")
-    runLocalCommand("taskset -c 3,5,7,9,11,13,15 mutilate -A --affinity -T 7")
-    time.sleep(1)
-    qps = runMutilateStats("taskset -c 1 mutilate --binary -B -s "+MASTER+" --noload -a localhost -K fb_key -V fb_value -i fb_ia -u 0.25 -c 8 -d 4 -C 8 --search=99:500 -t 30")
+    #runLocalCommand("taskset -c 3,5,7,9,11,13,15 mutilate -A --affinity -T 7")
+    #-K fb_key -V fb_value -i fb_ia -u 0.033
+    qps = runMutilateStats("taskset -c 1 mutilate --binary -B -s "+MASTER+" --noload -a localhost,192.168.1.201,192.168.1.202,192.168.1.30 --threads=1 --records=1000000 "+WORKLOADS['etc']+" --depth=4 --measure_depth=1 --connections=48 --measure_connections=32 --measure_qps=2000 --search=99:500 -t 60")
     #qps = runMutilateStats("taskset -c 1 mutilate --binary -B -s "+MASTER+" --noload -a localhost -K fb_key -V fb_value -i fb_ia -u 0.25 -c 14 -d 7 -C 14 --search=99:1000 -t 30")
     #qps = runMutilateStats("taskset -c 1 mutilate --binary -B -s "+MASTER+" --noload -a localhost  --keysize=19 --valuesize=2 -u 0.002 -c 8 -d 4 -C 8 --search=99:500 -t 30")
     runRemoteCommandOut("pkill memcached")
@@ -449,45 +460,332 @@ def runBenchStats():
         watts = 0.0
         ipc = 0.0
         avg_itr = 0.0
+        tlist = []
+        
         for l in str(output).split("\\n"):
-            #print(l.strip())
-            f = list(filter(None, l.strip().split(' ')))
+            print(l.strip())
+            f = list(filter(None, l.strip().split(' ')))            
             if 'cycles' in l:
-                cycles = int(f[0].replace(',', ''))
+                tlist.append(float(f[0].replace(',', '')))
+                cycles += int(f[1].replace(',', ''))
             if 'instructions' in l:
-                instructions = int(f[0].replace(',', ''))
+                tlist.append(float(f[0].replace(',', '')))
+                instructions += int(f[1].replace(',', ''))
             if 'load-misses' in l:
-                llc_load = int(f[0].replace(',', ''))
+                tlist.append(float(f[0].replace(',', '')))
+                llc_load += int(f[1].replace(',', ''))
             if 'store-misses' in l:
-                llc_store = int(f[0].replace(',', ''))
+                tlist.append(float(f[0].replace(',', '')))
+                llc_store += int(f[1].replace(',', ''))
             if 'energy-pkg' in l:
-                energy_pkg = float(f[0].replace(',', ''))
+                tlist.append(float(f[0].replace(',', '')))
+                energy_pkg += float(f[1].replace(',', ''))
             if 'energy-ram' in l:
-                energy_ram = float(f[0].replace(',', ''))
-            if 'seconds' in l:
-                ttime = float(f[0].replace(',', ''))
+                tlist.append(float(f[0].replace(',', '')))
+                energy_ram += float(f[1].replace(',', ''))
+        #print(tlist)
+        ttime = tlist[len(tlist)-1] - tlist[0]
         watts = (energy_pkg+energy_ram)/ttime
         ipc = instructions/float(cycles)
         avg_itr = (itr1+itr3+itr5+itr7+itr9+itr11+itr13+itr15) / 8.0
         print("RSC_DELAY=%d MAX_DESC=%d BSIZEHDR=%d RXRING=%d TXRING=%d ITR=%d DTXMXSZRQ=%d THRESHC=%d DCA=%d QPS=%.2f CYCLES=%d INSTRUCTIONS=%d LLC_LOAD_MISSES=%d LLC_STORE_MISSES=%d NRG_PKG=%.2f NRG_RAM=%.2f TIME=%.2f ITR1=%d ITR3=%d ITR5=%d ITR7=%d ITR9=%d ITR11=%d ITR13=%d ITR15=%d WATTS=%.2f QPS/WATT=%.2f LLC_MISSES=%d IPC=%.5f AVG_ITR_PER_CORE=%.2f" % (RSC_DELAY, MAX_DESC, BSIZEHDR, RXRING, TXRING, ITR, DTXMXSZRQ, THRESHC, DCA, qps, cycles, instructions, llc_load, llc_store, energy_pkg, energy_ram, ttime, itr1, itr3, itr5, itr7, itr9, itr11, itr13, itr15, watts, qps/watts, llc_load+llc_store, ipc, avg_itr))
-        #print("WATTS=%.2f" % ((energy_pkg+energy_ram) / ttime))
-if __name__ == '__main__':
-    if len(sys.argv) == 2:
-        setITR(sys.argv[1])
-        runBenchStats()
-    else:
-        runBenchStats()
-        #if updateNIC() == 1:
-        #    runBenchStats()
+        #print("WATTS=%.2f" % ((energy_pkg+energy_ram) / time))
 
-'''        
-if len(sys.argv) == 2:
-    setITR(sys.argv[1])
-    tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(24576), str(20000))
-    ##tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(524288), str(4000))
-    print("ITR=%d TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d TIME(s)=%f" % (int(sys.argv[1]), tput, int(nins), int(ncycles), int(cache_misses), watts, nitr, ttime))
-else:
-    tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(24576), str(20000))
-    #tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(524288), str(4000))
-    print("DefaultLinux=1 TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d TIME(s)=%f" % (tput, int(nins), int(ncycles), int(cache_misses), watts, nitr, ttime))
-'''
+def runMutilateQPSStats(com):
+    try:
+        print(com)
+        ret = -1.0
+        p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE)
+        output = p1.communicate()[0].strip()
+        if len(output) > 10:
+            for line in str(output).strip().split("\\n"):
+                print(line.strip())
+                if "Total QPS" in line:
+                    tmp = str(line.split("=")[1])
+                    qps = float(tmp.strip().split(" ")[0])
+                    ret = qps
+        return ret
+    except Exception as e:
+        print("An error occurred in runMutilateStats ", type(e), e)
+        return -1.0
+
+def runMutilateStats(com):
+    try:
+        #print(com)
+        ret = -1.0
+        p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE)
+        output = p1.communicate()[0].strip()
+        readnth = 0
+        updatenth = 0
+        if len(output) > 10:
+            for line in str(output).strip().split("\\n"):
+                #print(line.strip())
+                if "Total QPS" in line:
+                    tmp = str(line.split("=")[1])
+                    qps = float(tmp.strip().split(" ")[0])
+                    ret = qps
+                if "read" in line:
+                    readnth = float(list(filter(None, line.strip().split(' ')))[8])
+                if "update" in line:
+                    updatenth = float(list(filter(None, line.strip().split(' ')))[8])
+                    
+        return ret, readnth, updatenth
+    except Exception as e:
+        print("An error occurred in runMutilateStats ", type(e), e)
+        return -1.0, 0, 0
+
+def runBenchQPS(mqps):
+    sitr1 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-1 | tr -s ' ' | cut -d ' ' -f 4"))
+    sitr3 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-3 | tr -s ' ' | cut -d ' ' -f 6"))
+    sitr5 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-5 | tr -s ' ' | cut -d ' ' -f 8"))
+    sitr7 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-7 | tr -s ' ' | cut -d ' ' -f 10"))
+    sitr9 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-9 | tr -s ' ' | cut -d ' ' -f 12"))
+    sitr11 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-11 | tr -s ' ' | cut -d ' ' -f 14"))
+    sitr13 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-13 | tr -s ' ' | cut -d ' ' -f 16"))
+    sitr15 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-15 | tr -s ' ' | cut -d ' ' -f 18"))
+    runLocalCommand("taskset -c 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 /root/tmp/mutilate/mutilate --agentmode --affinity --threads 15")
+    time.sleep(1)
+    runRemoteCommands("/root/tmp/mutilate/mutilate --agentmode --affinity --threads=16", "192.168.1.201")
+    time.sleep(1)
+    runRemoteCommands("/root/tmp/mutilate/mutilate --agentmode --affinity --threads=16", "192.168.1.202")
+    time.sleep(1)
+    runRemoteCommands("/root/tmp/mutilate/mutilate --agentmode --affinity --threads=16", "192.168.1.30")
+    time.sleep(1)
+    #runRemoteCommand("chrt -r 1 perf stat -C 1,3,5,7,9,11,13,15 -D 1000 -I 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ numactl --cpunodebind=1 --membind=1 memcached -u nobody -t 8 -m 16G -c 16000 -o hashpower=20 -b 52000 -l "+MASTER+" -B binary")
+    #runRemoteCommand("perf stat -a -D 1000 -I 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ memcached -u nobody -t 16 -m 16G -c 16000 -o hashpower=20 -b 32000 -l "+MASTER+" -B binary")
+    runRemoteCommand("perf stat -a -D 4000 -I 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ memcached -u nobody -t 16 -m 16G -c 8192 -o hashpower=20 -b 8192 -l "+MASTER+" -B binary")
+    time.sleep(1)
+    runLocalCommandOut("taskset -c 1 /root/tmp/mutilate/mutilate --binary -s "+MASTER+" --loadonly --records=1000000 -K fb_key -V fb_value")
+    ## 
+    # RPSes = 990000
+    # RPSes = 930000
+    # RPSes = 1170000
+    #
+    ##
+    time.sleep(1)
+    qps,readnth,updatenth = runMutilateStats("taskset -c 0 /root/tmp/mutilate/mutilate -B --binary -s "+MASTER+" --noload --agent=localhost,192.168.1.201,192.168.1.202,192.168.1.30 --threads=1 --records=1000000 "+WORKLOADS['etc']+" --depth=4 --measure_depth=1 --connections=16 --measure_connections=16 --measure_qps=2000 --qps="+str(mqps)+" --time=60")
+    #qps = runMutilateStats("taskset -c 1 mutilate --binary -B -s "+MASTER+" --noload -a localhost -K fb_key -V fb_value -i fb_ia -u 0.25 -c 14 -d 7 -C 14 --search=99:1000 -t 30")
+    #qps = runMutilateStats("taskset -c 1 mutilate --binary -B -s "+MASTER+" --noload -a localhost  --keysize=19 --valuesize=2 -u 0.002 -c 8 -d 4 -C 8 --search=99:500 -t 30")
+    runRemoteCommandOut("pkill memcached")
+    if qps > 0.0:
+        time.sleep(0.1)
+        eitr1 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-1 | tr -s ' ' | cut -d ' ' -f 4"))
+        eitr3 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-3 | tr -s ' ' | cut -d ' ' -f 6"))
+        eitr5 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-5 | tr -s ' ' | cut -d ' ' -f 8"))
+        eitr7 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-7 | tr -s ' ' | cut -d ' ' -f 10"))
+        eitr9 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-9 | tr -s ' ' | cut -d ' ' -f 12"))
+        eitr11 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-11 | tr -s ' ' | cut -d ' ' -f 14"))
+        eitr13 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-13 | tr -s ' ' | cut -d ' ' -f 16"))
+        eitr15 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-15 | tr -s ' ' | cut -d ' ' -f 18"))
+        itr1 = eitr1 - sitr1
+        itr3 = eitr3 - sitr3
+        itr5 = eitr5 - sitr5
+        itr7 = eitr7 - sitr7
+        itr9 = eitr9 - sitr9
+        itr11 = eitr11 - sitr11
+        itr13 = eitr13 - sitr13
+        itr15 = eitr15 - sitr15
+        
+        output = runRemoteCommandGet(MASTER, "cat perf.out")
+        cycles = 0
+        instructions = 0
+        llc_load = 0
+        llc_store = 0
+        energy_pkg = 0.0
+        energy_ram = 0.0
+        ttime = 0.0
+        watts = 0.0
+        ipc = 0.0
+        avg_itr = 0.0
+        tlist = []
+        
+        for l in str(output).split("\\n"):
+            #print(l.strip())
+            f = list(filter(None, l.strip().split(' ')))            
+            if 'cycles' in l:
+                tlist.append(float(f[0].replace(',', '')))
+                cycles += int(f[1].replace(',', ''))
+            if 'instructions' in l:
+                tlist.append(float(f[0].replace(',', '')))
+                instructions += int(f[1].replace(',', ''))
+            if 'load-misses' in l:
+                tlist.append(float(f[0].replace(',', '')))
+                llc_load += int(f[1].replace(',', ''))
+            if 'store-misses' in l:
+                tlist.append(float(f[0].replace(',', '')))
+                llc_store += int(f[1].replace(',', ''))
+            if 'energy-pkg' in l:
+                tlist.append(float(f[0].replace(',', '')))
+                energy_pkg += float(f[1].replace(',', ''))
+            if 'energy-ram' in l:
+                tlist.append(float(f[0].replace(',', '')))
+                energy_ram += float(f[1].replace(',', ''))
+        #print(tlist)
+        ttime = tlist[len(tlist)-1] - tlist[0]
+        watts = (energy_pkg+energy_ram)/ttime
+        ipc = instructions/float(cycles)
+        avg_itr = (itr1+itr3+itr5+itr7+itr9+itr11+itr13+itr15) / 8.0
+        print("RSC_DELAY=%d MAX_DESC=%d BSIZEHDR=%d RXRING=%d TXRING=%d ITR=%d DTXMXSZRQ=%d THRESHC=%d DCA=%d QPS=%.2f CYCLES=%d INSTRUCTIONS=%d LLC_LOAD_MISSES=%d LLC_STORE_MISSES=%d NRG_PKG=%.2f NRG_RAM=%.2f TIME=%.2f ITR1=%d ITR3=%d ITR5=%d ITR7=%d ITR9=%d ITR11=%d ITR13=%d ITR15=%d WATTS=%.2f QPS/WATT=%.2f LLC_MISSES=%d IPC=%.5f AVG_ITR_PER_CORE=%.2f RAPL=%d, readnth=%.2f updatenth=%.2f" % (RSC_DELAY, MAX_DESC, BSIZEHDR, RXRING, TXRING, ITR, DTXMXSZRQ, THRESHC, DCA, qps, cycles, instructions, llc_load, llc_store, energy_pkg, energy_ram, ttime, itr1, itr3, itr5, itr7, itr9, itr11, itr13, itr15, watts, qps/watts, llc_load+llc_store, ipc, avg_itr, RAPL, readnth, updatenth))
+
+def runZygosStats(com):
+    try:
+        #print(com)
+        ret = -1.0
+        p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE)
+        output = p1.communicate()[0].strip()
+        readnth = 0
+        updatenth = 0
+        if len(output) > 10:
+            for line in str(output).strip().split("\\n"):
+                #print(line.strip())
+                if "Total QPS" in line:
+                    tmp = str(line.split("=")[1])
+                    qps = float(tmp.strip().split(" ")[0])
+                    ret = qps
+                if "read" in line:
+                    readnth = float(list(filter(None, line.strip().split(' ')))[9])
+                if "update" in line:
+                    updatenth = float(list(filter(None, line.strip().split(' ')))[9])
+                    
+        return ret, readnth, updatenth
+    except Exception as e:
+        print("An error occurred in runZygosStats ", type(e), e)
+        return -1.0, 0, 0
+
+    
+def runZygos(seek_qps):    
+    sitr1 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-1 | tr -s ' ' | cut -d ' ' -f 4"))
+    sitr3 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-3 | tr -s ' ' | cut -d ' ' -f 6"))
+    sitr5 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-5 | tr -s ' ' | cut -d ' ' -f 8"))
+    sitr7 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-7 | tr -s ' ' | cut -d ' ' -f 10"))
+    sitr9 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-9 | tr -s ' ' | cut -d ' ' -f 12"))
+    sitr11 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-11 | tr -s ' ' | cut -d ' ' -f 14"))
+    sitr13 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-13 | tr -s ' ' | cut -d ' ' -f 16"))
+    sitr15 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-15 | tr -s ' ' | cut -d ' ' -f 18"))
+    runRemoteCommand("chrt -r 1 perf stat -C 1,3,5,7,9,11,13,15 -D 60000 -I 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ numactl --cpunodebind=1 --membind=1 /root/zygos-bench/servers/silotpcc-linux")
+    print("#### WAITING ####")
+    time.sleep(60)
+    runLocalCommand("taskset -c 3,5,7,9,11,13,15 /root/tmp/zygos_mutilate/mutilate -A --affinity -T 7")
+    time.sleep(1)
+    ## default Linux qps == 206000 without violating 99% tail latency < 1000 us
+    #etc --keysize=fb_key --valuesize=fb_value --iadist=fb_ia --update=0.033
+    #qps = runZygosStats("taskset -c 1 /root/tmp/zygos_mutilate/mutilate --records=1000000 --qps=229000 --time=60 --server=192.168.1.200:11211 --keysize=fb_key --valuesize=fb_value --iadist=fb_ia --update=0.033 --noload --threads=1 --depth=4 --measure_depth=1 --connections=340 --measure_connections=32 --measure_qps=2000 --agent=localhost --binary")
+    qps,readnth,updatenth = runZygosStats("taskset -c 1 /root/tmp/zygos_mutilate/mutilate --records=1000000 --qps="+str(seek_qps)+" --time=60 --server=192.168.1.200:11211 --keysize=fb_key --valuesize=fb_value --iadist=fb_ia --update=0.033 --noload --threads=1 --depth=4 --measure_depth=1 --connections=340 --measure_connections=32 --measure_qps=2000 --agent=localhost --binary")
+    
+    #usr --keysize=19 --valuesize=2 --update=0.002
+    #qps = runZygosStats("taskset -c 1 /root/tmp/zygos_mutilate/mutilate --records=1000000 --qps=200000 --time=60 --server=192.168.1.200:11211 --keysize=19 --valuesize=2 --update=0.002 --noload --threads=1 --depth=4 --measure_depth=1 --connections=340 --measure_connections=32 --measure_qps=2000 --agent=localhost --binary")
+    runRemoteCommandOut("pkill silotpcc-linux")
+    if qps > 0.0:
+        time.sleep(0.1)
+        eitr1 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-1 | tr -s ' ' | cut -d ' ' -f 4"))
+        eitr3 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-3 | tr -s ' ' | cut -d ' ' -f 6"))
+        eitr5 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-5 | tr -s ' ' | cut -d ' ' -f 8"))
+        eitr7 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-7 | tr -s ' ' | cut -d ' ' -f 10"))
+        eitr9 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-9 | tr -s ' ' | cut -d ' ' -f 12"))
+        eitr11 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-11 | tr -s ' ' | cut -d ' ' -f 14"))
+        eitr13 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-13 | tr -s ' ' | cut -d ' ' -f 16"))
+        eitr15 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-15 | tr -s ' ' | cut -d ' ' -f 18"))
+        itr1 = eitr1 - sitr1
+        itr3 = eitr3 - sitr3
+        itr5 = eitr5 - sitr5
+        itr7 = eitr7 - sitr7
+        itr9 = eitr9 - sitr9
+        itr11 = eitr11 - sitr11
+        itr13 = eitr13 - sitr13
+        itr15 = eitr15 - sitr15
+        
+        output = runRemoteCommandGet(MASTER, "cat perf.out")
+        cycles = 0
+        instructions = 0
+        llc_load = 0
+        llc_store = 0
+        energy_pkg = 0.0
+        energy_ram = 0.0
+        stime = 0.0
+        etime = 0.0
+        ttime = 0.0
+        watts = 0.0
+        ipc = 0.0
+        avg_itr = 0.0
+        cc = 0
+        
+        for l in str(output).split("\\n"):
+            f = list(filter(None, l.strip().split(' ')))
+            if 'cycles' in l:
+                if cc == 0:
+                    stime = float(f[0].replace(',', ''))
+                    cc = 1
+                else:
+                    etime = float(f[0].replace(',', ''))
+                    
+                cycles += int(f[1].replace(',', ''))
+            if 'instructions' in l:
+                if cc == 0:
+                    stime = float(f[0].replace(',', ''))
+                    cc = 1
+                else:
+                    etime = float(f[0].replace(',', ''))
+                instructions += int(f[1].replace(',', ''))
+            if 'load-misses' in l:
+                if cc == 0:
+                    stime = float(f[0].replace(',', ''))
+                    cc = 1
+                else:
+                    etime = float(f[0].replace(',', ''))
+                llc_load += int(f[1].replace(',', ''))
+            if 'store-misses' in l:
+                if cc == 0:
+                    stime = float(f[0].replace(',', ''))
+                    cc = 1
+                else:
+                    etime = float(f[0].replace(',', ''))
+                llc_store += int(f[1].replace(',', ''))
+            if 'energy-pkg' in l:
+                if cc == 0:
+                    stime = float(f[0].replace(',', ''))
+                    cc = 1
+                else:
+                    etime = float(f[0].replace(',', ''))
+                energy_pkg += float(f[1].replace(',', ''))
+            if 'energy-ram' in l:
+                if cc == 0:
+                    stime = float(f[0].replace(',', ''))
+                    cc = 1
+                else:
+                    etime = float(f[0].replace(',', ''))
+                energy_ram += float(f[1].replace(',', ''))
+
+        ttime = etime - stime
+        watts = (energy_pkg+energy_ram)/ttime
+        ipc = instructions/float(cycles)
+        avg_itr = (itr1+itr3+itr5+itr7+itr9+itr11+itr13+itr15) / 8.0
+        print("RSC_DELAY=%d MAX_DESC=%d BSIZEHDR=%d RXRING=%d TXRING=%d ITR=%d DTXMXSZRQ=%d THRESHC=%d DCA=%d QPS=%.2f CYCLES=%d INSTRUCTIONS=%d LLC_LOAD_MISSES=%d LLC_STORE_MISSES=%d NRG_PKG=%.2f NRG_RAM=%.2f TIME=%.2f ITR1=%d ITR3=%d ITR5=%d ITR7=%d ITR9=%d ITR11=%d ITR13=%d ITR15=%d WATTS=%.2f QPS/WATT=%.2f LLC_MISSES=%d IPC=%.5f AVG_ITR_PER_CORE=%.2f seek_qps=%d readnth=%.2f updatenth=%.2f" % (RSC_DELAY, MAX_DESC, BSIZEHDR, RXRING, TXRING, ITR, DTXMXSZRQ, THRESHC, DCA, qps, cycles, instructions, llc_load, llc_store, energy_pkg, energy_ram, ttime, itr1, itr3, itr5, itr7, itr9, itr11, itr13, itr15, watts, qps/watts, llc_load+llc_store, ipc, avg_itr, int(seek_qps), readnth, updatenth))
+        
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        if str(sys.argv[1]) == "ITR":
+            setITR(sys.argv[2])
+            runBenchStats()
+        elif str(sys.argv[1]) == "overnight":
+            if updateNIC() == 1:
+                runBenchQPS("990000")
+                #runBenchStats()
+        elif str(sys.argv[1]) == "qps":
+            runBenchQPS(sys.argv[2])
+        elif str(sys.argv[1]) == "qps_pow":
+            setRAPL(sys.argv[3])
+            runBenchQPS(sys.argv[2])
+        elif str(sys.argv[1]) == "qps_itr":
+            setITR(sys.argv[3])
+            runBenchQPS(sys.argv[2])
+        elif str(sys.argv[1]) == "qps_pow_itr":
+            setITR(sys.argv[4])
+            setRAPL(sys.argv[3])
+            runBenchQPS(sys.argv[2])
+        elif str(sys.argv[1]) == "search":
+            runBenchSearch()
+        elif str(sys.argv[1]) == "zygos":
+            runZygos(sys.argv[2])
+        elif str(sys.argv[1]) == "zygos_itr":
+            #setITR(sys.argv[2])
+            runZygos()

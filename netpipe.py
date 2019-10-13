@@ -512,10 +512,11 @@ msg = np.random.randint(500, 20000)
     #print("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d" % (msg, ITR/2, DTXMXSZRQ, WTHRESH, PTHRESH, HTHRESH, int(tput), int(nins), int(ncycles), int(cache_misses), int(watts), nitr))
 '''
 
-if updateNIC() == 1:
-    tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(24576), str(10000))
+#if updateNIC() == 1:
+#    tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(24576), str(10000))
     ##tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(524288), str(4000))
-    print("TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d TIME(s)=%f" % (tput, int(nins), int(ncycles), int(cache_misses), watts, nitr, ttime))
+#    print("TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d TIME(s)=%f" % (tput, int(nins), int(ncycles), int(cache_misses), watts, nitr, ttime))
     #tput,nins,ncycles,watts,cache_misses,nitr = runStatic(str(msg))
     #print("TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d" % (tput, int(nins), int(ncycles), int(cache_misses), watts, nitr))
-
+tput,nins,ncycles,watts,cache_misses,nitr = runStatic(str(10000))
+print("TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d" % (tput, int(nins), int(ncycles), int(cache_misses), watts, nitr))

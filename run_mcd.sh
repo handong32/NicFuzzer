@@ -9,7 +9,18 @@ export OUTFILE=${OUTFILE:=0}
 
 currdate=`date +%m_%d_%Y_%H_%M_%S`
 
-function run5
+function zygos
+{
+    for i in `seq 1 1 $NITERS`;
+    do
+	ssh $SERVER "pkill memcached"
+	pkill mutilate
+	sleep 1
+	timeout 300 python3 mutilate_bench.py zygos $1
+    done
+}
+
+function runZygos
 {
     for i in `seq 1 1 $NITERS`;
     do
@@ -18,17 +29,138 @@ function run5
 	    ssh $SERVER "pkill memcached"
 	    pkill mutilate
 	    sleep 1
-	    timeout 90 python3 -u mutilate_bench.py $d
+	    timeout 300 python3 mutilate_bench.py zygos_itr $d
+	done
+    done
+}
+
+function runZygosOvernight
+{
+    NITERS=3 RXU='2 10 20 30 40 42 44 50 60 62 64 70 80 82 84 86 90 100 110 120 122 124 126 128 130 140 150' runZygos > zygos_10_7_2019_135Watt_etc.log
+
+    sleep 5
+    ssh 10.255.5.8 ~/uarch-configure/rapl-read/rapl-power-mod 120
+    sleep 5
+
+    NITERS=3 RXU='2 10 20 30 40 42 44 50 60 62 64 70 80 82 84 86 90 100 110 120 122 124 126 128 130 140 150' runZygos > zygos_10_7_2019_120Watt_etc.log
+
+    sleep 5
+    ssh 10.255.5.8 ~/uarch-configure/rapl-read/rapl-power-mod 110
+    sleep 5
+
+    NITERS=3 RXU='2 10 20 30 40 42 44 50 60 62 64 70 80 82 84 86 90 100 110 120 122 124 126 128 130 140 150' runZygos > zygos_10_7_2019_110Watt_etc.log
+
+    sleep 5
+    ssh 10.255.5.8 ~/uarch-configure/rapl-read/rapl-power-mod 100
+    sleep 5
+
+    NITERS=3 RXU='2 10 20 30 40 42 44 50 60 62 64 70 80 82 84 86 90 100 110 120 122 124 126 128 130 140 150' runZygos > zygos_10_7_2019_100Watt_etc.log
+
+    sleep 5
+    ssh 10.255.5.8 ~/uarch-configure/rapl-read/rapl-power-mod 90
+    sleep 5
+
+    NITERS=3 RXU='2 10 20 30 40 42 44 50 60 62 64 70 80 82 84 86 90 100 110 120 122 124 126 128 130 140 150' runZygos > zygos_10_7_2019_90Watt_etc.log
+    
+    sleep 5
+    ssh 10.255.5.8 ~/uarch-configure/rapl-read/rapl-power-mod 80
+    sleep 5
+
+    NITERS=3 RXU='2 10 20 30 40 42 44 50 60 62 64 70 80 82 84 86 90 100 110 120 122 124 126 128 130 140 150' runZygos > zygos_10_7_2019_80Watt_etc.log
+
+    sleep 5
+    ssh 10.255.5.8 ~/uarch-configure/rapl-read/rapl-power-mod 70
+    sleep 5
+
+    NITERS=3 RXU='2 10 20 30 40 42 44 50 60 62 64 70 80 82 84 86 90 100 110 120 122 124 126 128 130 140 150' runZygos > zygos_10_7_2019_70Watt_etc.log
+
+    sleep 5
+    ssh 10.255.5.8 ~/uarch-configure/rapl-read/rapl-power-mod 60
+    sleep 5
+
+    NITERS=3 RXU='2 10 20 30 40 42 44 50 60 62 64 70 80 82 84 86 90 100 110 120 122 124 126 128 130 140 150' runZygos > zygos_10_7_2019_60Watt_etc.log
+}
+
+function runQPS
+{
+    ssh $SERVER "pkill memcached"
+    pkill mutilate
+    sleep 1
+    timeout 90 python3 -u mutilate_bench.py $1 $2 $3
+}
+
+function run6
+{
+    #mcd_data/10_03_2019_QPS_930000_135Watt.log  mcd_data/10_03_2019_QPS_990000_16_8_16_135Watt.log
+    #mcd_data/10_03_2019_QPS_930000_64Watt.log   mcd_data/10_03_2019_QPS_990000_64Watt.log
+    #mcd_data/10_03_2019_QPS_930000_88Watt.log   mcd_data/10_03_2019_QPS_990000_88Watt.log
+    #mcd_data/10_03_2019_QPS_990000_135Watt.log
+    for i in `seq 1 1 $NITERS`;
+    do
+	for d in $RXU;
+	do
+	    ssh $SERVER "pkill memcached"
+	    pkill mutilate
+	    sleep 1
+	    timeout 90 python3 -u mutilate_bench.py qps_itr $d $1
+	done
+    done
+}
+
+function test
+{
+    NITERS=2 RXU='64 70 80 82 84 86 90 100 110' run6 990000
+}
+
+function runOvernight
+{
+    NITERS=6 RXU='10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200' ./run_mcd.sh run5 1200000 >> 10_12_2019_QPS_1200000.log
+    sleep 1
+    NITERS=6 RXU='10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200' ./run_mcd.sh run5 800000 >> 10_12_2019_QPS_800000.log
+    sleep 1
+    NITERS=6 RXU='10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200' ./run_mcd.sh run5 400000 >> 10_12_2019_QPS_400000.log
+}
+
+function run5
+{
+    for i in `seq 1 1 $NITERS`;
+    do
+	for d in $RXU;
+	do
+	    ssh $SERVER "pkill memcached"
+	    sleep 1
+	    pkill mutilate
+	    sleep 1
+	    ssh 192.168.1.201 pkill mutilate
+	    sleep 1
+	    ssh 192.168.1.202 pkill mutilate
+	    sleep 1
+	    ssh 192.168.1.30 pkill mutilate
+	    sleep 1
+	    timeout 600 python3 -u mutilate_bench.py qps_itr $1 $d
 	done
     done
 }
 
 function run4
 {
-    ssh $SERVER "pkill memcached"
-    pkill mutilate
-    sleep 1
-    timeout 90 python3 -u mutilate_bench.py $1
+    for i in `seq 1 1 $NITERS`;
+    do
+	for d in $RXU;
+	do
+	    ssh $SERVER "pkill memcached"
+	    sleep 1
+	    pkill mutilate
+	    sleep 1
+	    ssh 192.168.1.201 pkill mutilate
+	    sleep 1
+	    ssh 192.168.1.202 pkill mutilate
+	    sleep 1
+	    ssh 192.168.1.30 pkill mutilate
+	    sleep 1
+	    timeout 600 python3 -u mutilate_bench.py $1 $2 $3 $4
+	done
+    done
 }
 
 function run3
@@ -37,7 +169,7 @@ function run3
 	ssh $SERVER "pkill memcached"
 	pkill mutilate
 	sleep 1
-	timeout 90 python3 -u mutilate_bench.py
+	timeout 90 python3 -u mutilate_bench.py overnight
 	sleep 1
     done
 }
@@ -49,6 +181,7 @@ function run2
     sleep 1
     timeout 90 python3 -u mutilate_bench.py
 }
+
 
 function run
 {
@@ -114,4 +247,4 @@ function run
     done
 }
 
-$1 $2
+$1 $2 $3 $4 $5
