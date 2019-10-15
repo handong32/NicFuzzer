@@ -112,15 +112,6 @@ function test
     NITERS=2 RXU='64 70 80 82 84 86 90 100 110' run6 990000
 }
 
-function runOvernight
-{
-    NITERS=6 RXU='10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200' ./run_mcd.sh run5 1200000 >> 10_12_2019_QPS_1200000.log
-    sleep 1
-    NITERS=6 RXU='10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200' ./run_mcd.sh run5 800000 >> 10_12_2019_QPS_800000.log
-    sleep 1
-    NITERS=6 RXU='10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200' ./run_mcd.sh run5 400000 >> 10_12_2019_QPS_400000.log
-}
-
 function run5
 {
     for i in `seq 1 1 $NITERS`;
@@ -140,6 +131,15 @@ function run5
 	    timeout 600 python3 -u mutilate_bench.py qps_itr $1 $d
 	done
     done
+}
+
+function runOvernight
+{
+    NITERS=6 RXU='10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200' run5 1200000 >> 10_12_2019_QPS_1200000.log
+    sleep 1
+    NITERS=6 RXU='10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200' run5 800000 >> 10_12_2019_QPS_800000.log
+    sleep 1
+    NITERS=6 RXU='10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180 190 200' run5 400000 >> 10_12_2019_QPS_400000.log
 }
 
 function run4
