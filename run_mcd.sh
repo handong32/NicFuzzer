@@ -156,9 +156,13 @@ function run4
 	    sleep 1
 	    ssh 192.168.1.202 pkill mutilate
 	    sleep 1
-	    ssh 192.168.1.30 pkill mutilate
+	    ssh 192.168.1.203 pkill mutilate
 	    sleep 1
-	    timeout 600 python3 -u mutilate_bench.py $1 $2 $3 $4
+	    ssh 192.168.1.204 pkill mutilate
+	    sleep 1
+	    ssh 192.168.1.205 pkill mutilate
+	    sleep 1
+	    timeout 3600 python3 -u mutilate_bench.py $1 $2 $3 $4
 	done
     done
 }
