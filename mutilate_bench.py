@@ -29,9 +29,12 @@ RXRING = 0
 TXRING = 0
 RAPL = 135
 
-WORKLOADS = {                                                                                                            
-  'etc': '--keysize=fb_key --valuesize=fb_value --iadist=fb_ia --update=0.033',                                          
-  'usr': '--keysize=19 --valuesize=2 --update=0.002',                                                                    
+WORKLOADS = {
+    #ETC = 75% GET, 25% SET
+    'etc': '--keysize=fb_key --valuesize=fb_value --iadist=fb_ia --update=0.25',
+
+    #USR = 99% GET, 1% SET
+    'usr': '--keysize=19 --valuesize=2 --update=0.01'
 }
 
 '''
@@ -464,7 +467,7 @@ def runBenchQPS(mqps):
     runLocalCommandOut("taskset -c 1 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --loadonly --records=1000000 -K fb_key -V fb_value")
 
     time.sleep(1)
-    qps,readnth,updatenth = runMutilateStats("taskset -c 0 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --noload --agent=192.168.1.201,192.168.1.202,192.168.1.203,192.168.1.204,192.168.1.205 --threads=1 --records=1000000 "+WORKLOADS['etc']+" --depth=4 --measure_depth=1 --connections=16 --measure_connections=16 --measure_qps=2000 --qps="+str(mqps)+" --time=60")
+    qps,readnth,updatenth = runMutilateStats("taskset -c 0 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --noload --agent=192.168.1.201,192.168.1.202,192.168.1.203,192.168.1.204,192.168.1.205 --threads=1 --records=1000000 "+WORKLOADS['usr']+" --depth=4 --measure_depth=1 --connections=16 --measure_connections=32 --measure_qps=2000 --qps="+str(mqps)+" --time=120")
     
     runRemoteCommandOut("pkill memcached")
     if qps > 0.0:
@@ -571,21 +574,21 @@ def runZygos(mqps):
     sitr15 = int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-15 | tr -s ' ' | cut -d ' ' -f 18"))
     #runLocalCommand("taskset -c 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 /root/tmp/mutilate/mutilate --agentmode --affinity --threads 15")
     #time.sleep(1)
-    runRemoteCommands("/root/tmp/mutilate/mutilate --agentmode --affinity --threads=16", "192.168.1.201")
+    runRemoteCommands("/root/tmp/zygos_mutilate/mutilate --agentmode --affinity --threads=16", "192.168.1.201")
     time.sleep(1)
-    runRemoteCommands("/root/tmp/mutilate/mutilate --agentmode --affinity --threads=16", "192.168.1.202")
+    runRemoteCommands("/root/tmp/zygos_mutilate/mutilate --agentmode --affinity --threads=16", "192.168.1.202")
     time.sleep(1)
-    runRemoteCommands("/root/tmp/mutilate/mutilate --agentmode --affinity --threads=16", "192.168.1.203")
+    runRemoteCommands("/root/tmp/zygos_mutilate/mutilate --agentmode --affinity --threads=16", "192.168.1.203")
     time.sleep(1)
-    runRemoteCommands("/root/tmp/mutilate/mutilate --agentmode --affinity --threads=16", "192.168.1.204")
+    runRemoteCommands("/root/tmp/zygos_mutilate/mutilate --agentmode --affinity --threads=16", "192.168.1.204")
     time.sleep(1)
-    runRemoteCommands("/root/tmp/mutilate/mutilate --agentmode --affinity --threads=16", "192.168.1.205")
+    runRemoteCommands("/root/tmp/zygos_mutilate/mutilate --agentmode --affinity --threads=16", "192.168.1.205")
     time.sleep(1)
     runRemoteCommand("perf stat -a -D 30000 -I 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ /root/servers/silotpcc-linux")
     time.sleep(29)
     #192.168.1.201,192.168.1.202,192.168.1.203,192.168.1.204,192.168.1.205
     #qps,readnth,updatenth = runMutilateStats("taskset -c 0 /root/tmp/mutilate/mutilate -B --binary -s "+MASTER+" --noload --agent=localhost,192.168.1.201,192.168.1.202,192.168.1.30 --threads=1 --records=1000000 "+WORKLOADS['etc']+" --depth=4 --measure_depth=1 --connections=16 --measure_connections=16 --measure_qps=2000 --qps="+str(mqps)+" --time=60")
-    qps,readnth,updatenth = runMutilateStats("taskset -c 0 /root/tmp/mutilate/mutilate -B --binary -s "+MASTER+" --noload --agent=192.168.1.201,192.168.1.202,192.168.1.203,192.168.1.204,192.168.1.205 --threads=1 --records=1000000 "+WORKLOADS['etc']+" --depth=4 --measure_depth=1 --connections=16 --measure_connections=16 --measure_qps=2000 --qps="+str(mqps)+" --time=60")
+    qps,readnth,updatenth = runMutilateStats("taskset -c 0 /root/tmp/zygos_mutilate/mutilate -B --binary -s "+MASTER+" --noload --agent=192.168.1.201,192.168.1.202,192.168.1.203,192.168.1.204,192.168.1.205 --threads=1 --records=1000000 "+WORKLOADS['etc']+" --depth=4 --measure_depth=1 --connections=16 --measure_connections=16 --measure_qps=2000 --qps="+str(mqps)+" --time=120")
     runRemoteCommandOut("pkill silotpcc-linux")
     if qps > 0.0:
         time.sleep(0.1)
@@ -764,7 +767,7 @@ if __name__ == '__main__':
             runBenchQPS(sys.argv[2])
         elif str(sys.argv[1]) == "qps_pow_itr":
             setRAPL(sys.argv[3])
-            setITR(sys.argv[4])  
+            setITR(sys.argv[4])
             runBenchQPS(sys.argv[2])
         elif str(sys.argv[1]) == "search":
             runBenchSearch()
@@ -775,6 +778,10 @@ if __name__ == '__main__':
             runZygos(sys.argv[2])
         elif str(sys.argv[1]) == "zygos_itr":
             setITR(sys.argv[3])
+            runZygos(sys.argv[2])
+        elif str(sys.argv[1]) == "zygos_pow_itr":
+            setRAPL(sys.argv[3])
+            setITR(sys.argv[4])
             runZygos(sys.argv[2])
         elif str(sys.argv[1]) == "test":
             #print(runRemoteCommandGet(CSERVER2, "ulimit -a"))

@@ -150,6 +150,8 @@ function run4
 	do
 	    ssh $SERVER "pkill memcached"
 	    sleep 1
+	    ssh $SERVER "pkill silotpcc-linux"
+	    sleep 1
 	    pkill mutilate
 	    sleep 1
 	    ssh 192.168.1.201 pkill mutilate
@@ -162,7 +164,7 @@ function run4
 	    sleep 1
 	    ssh 192.168.1.205 pkill mutilate
 	    sleep 1
-	    timeout 3600 python3 -u mutilate_bench.py $1 $2 $3 $4
+	    timeout 600 python3 -u mutilate_bench.py $1 $2 $3 $4
 	done
     done
 }
