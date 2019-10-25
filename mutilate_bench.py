@@ -31,6 +31,8 @@ RAPL = 135
 ITRC = []
 TYPE = 'etc'
 TIME = 120
+SEARCH = 0
+VERBOSE = 0
 
 WORKLOADS = {
     #ETC = 75% GET, 25% SET
@@ -107,7 +109,7 @@ def start_counter():
     for i in range(0, 16):
         ITRC.append(int(runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-"+str(i)+" | tr -s ' ' | cut -d ' ' -f "+str(s))))
         s += 1
-    print(ITRC)
+    #print(ITRC)
         
 def end_counter(qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th):
     s = 3
@@ -476,7 +478,7 @@ def runScan(com):
 
 def runMutilateStatsAll(com):
     try:
-        print(com)
+        #print(com)
         ret = -1.0
         p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE)
         output = p1.communicate()[0].strip()
@@ -491,7 +493,8 @@ def runMutilateStatsAll(com):
         read_99th = 0
         if len(output) > 10:
             for line in str(output).strip().split("\\n"):
-                print(line.strip())
+                if VERBOSE == 1:
+                    print(line.strip())
                 if "Total QPS" in line:
                     tmp = str(line.split("=")[1])
                     qps = float(tmp.strip().split(" ")[0])
@@ -510,34 +513,8 @@ def runMutilateStatsAll(com):
                     
         return ret, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th
     except Exception as e:
-        print("An error occurred in runMutilateStats ", type(e), e)
+        print("An error occurred in runMutilateStatsAll ", type(e), e)
         return -1.0, 0, 0, 0, 0, 0, 0, 0, 0
-
-    
-def runMutilateStats(com):
-    try:
-        #print(com)
-        ret = -1.0
-        p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE)
-        output = p1.communicate()[0].strip()
-        readnth = 0
-        updatenth = 0
-        if len(output) > 10:
-            for line in str(output).strip().split("\\n"):
-                print(line.strip())
-                if "Total QPS" in line:
-                    tmp = str(line.split("=")[1])
-                    qps = float(tmp.strip().split(" ")[0])
-                    ret = qps
-                if "read" in line:
-                    readnth = float(list(filter(None, line.strip().split(' ')))[9])
-                if "update" in line:
-                    updatenth = float(list(filter(None, line.strip().split(' ')))[9])
-                    
-        return ret, readnth, updatenth
-    except Exception as e:
-        print("An error occurred in runMutilateStats ", type(e), e)
-        return -1.0, 0, 0
 
 def runBenchQPS(mqps):
     start_counter()
@@ -565,7 +542,10 @@ def runBenchQPS(mqps):
     
     runRemoteCommandOut("pkill memcached")
     if qps > 0.0:
-        end_counter(qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th)
+        if SEARCH:
+            print(read_99th)
+        else:
+            end_counter(qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th)
         
 #####################################################################################################
 #
@@ -599,12 +579,14 @@ def runZygos(mqps):
         
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--bench", help="type of benchmark")
-    parser.add_argument("--rapl", help="rapl power limit")
-    parser.add_argument("--itr", help="static interrupt delay")
-    parser.add_argument("--qps", type=int, help="qps rate")
-    parser.add_argument("--time", type=int, help="time in seconds to run")
-    parser.add_argument("--type", help="etc or usr")
+    parser.add_argument("--bench", help="Type of benchmark [mcd, zygos]")
+    parser.add_argument("--rapl", help="Rapl power limit [35, 135]")
+    parser.add_argument("--itr", help="Static interrupt delay [10, 500]")
+    parser.add_argument("--qps", type=int, help="RPS rate")
+    parser.add_argument("--time", type=int, help="Time in seconds to run")
+    parser.add_argument("--type", help="Workload type [etc, usr]")
+    parser.add_argument("--pow_search_enable", help="Limit printf for search power limit")
+    parser.add_argument("--verbose", help="Print mcd raw stats")
     
     args = parser.parse_args()
     mqps = 100000
@@ -620,7 +602,11 @@ if __name__ == '__main__':
         TIME = args.time
     if args.type:
         TYPE = args.type
-
+    if args.pow_search_enable:
+        SEARCH = 1
+    if args.verbose:
+        VERBOSE = 1
+        
     if args.bench == "mcd":
         runBenchQPS(mqps)
     elif args.bench == "zygos":

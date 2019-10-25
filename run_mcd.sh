@@ -169,22 +169,6 @@ function run4
     done
 }
 
-function runo2
-{
-    run4 zygos_pow_itr 200000 135 210
-    sleep 1
-    run4 zygos_pow_itr 140000 135 296
-    sleep 1
-    run4 zygos_pow_itr 70000 135 300
-    sleep 1
-    echo "pow_itr"
-    run4 zygos_pow_itr 70000 135 300
-    sleep 1
-    run4 zygos_pow_itr 70000 35 130
-    sleep 1
-    run4 zygos_pow_itr 70000 35 190
-}
-
 function run3
 {
     while true; do
@@ -301,6 +285,150 @@ function runMutilateBench
 	done
     done
 }
+
+function searchPowerLimit
+{
+    # ETC: 900000, 800000, 700000, 600000, 500000, 400000
+    sla=500
+    #
+    for mqps in 500000, 600000, 700000, 800000, 900000; do
+	satisfy_sla=0
+	violate_sla=0
+	for rapl in 35 40 50 60 70 80 90 100 110;
+	do
+	    NITERS=1 runMutilateBench --qps $mqps --time 60 --rapl $rapl --bench mcd --type etc --pow_search_enable 1 > searchPowerLimit.log
+    	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+    	    if [ $read99th -lt $sla ]
+    	    then
+    		echo "RAPL=$rapl mqps=$mqps $read99th < SLA"
+    		satisfy_sla=$rapl
+    		break
+    	    else
+    		violate_sla=$rapl
+    		echo "RAPL=$rapl mqps=$mqps SLA < $read99th"
+    	    fi
+	done
+
+	violate_sla=$((violate_sla+2))
+	satisfy_sla=$((satisfy_sla+4))
+	for ((rapl=$violate_sla; rapl < $satisfy_sla; rapl+=2)); do
+	    NITERS=1 runMutilateBench --qps $mqps --time 60 --rapl $rapl --bench mcd --type etc --pow_search_enable 1 > searchPowerLimit.log
+    	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+	    echo "RAPL=$rapl mqps=$mqps 99percentile=$read99th"
+    	    if [ $read99th -lt $sla ]
+    	    then
+		echo "RAPL=$rapl mqps=$mqps $read99th < SLA"
+		NITERS=3 runMutilateBench --qps $mqps --time 120 --rapl $rapl --bench mcd --type etc --verbose 1 >> mcd_data/10_25_19_MCD_ETC_QPS_$mqps.log
+    		break
+	    fi
+	done	
+    done
+    
+}
+
+function runon2
+{
+    # ETC: 1000000, 900000, 800000, 700000, 600000, 500000, 400000, 300000, 200000, 100000
+    echo "******************** ETC START **********************************"
+    NITERS=3 runMutilateBench --bench mcd --qps 1400000 --time 120 --type etc
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 1300000 --time 120 --type etc
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 1200000 --time 120 --type etc
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 1100000 --time 120 --type etc
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 1000000 --time 120 --type etc
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 900000 --time 120 --type etc
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 800000 --time 120 --type etc
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 700000 --time 120 --type etc
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 600000 --time 120 --type etc
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 500000 --time 120 --type etc
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 400000 --time 120 --type etc
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 300000 --time 120 --type etc
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 200000 --time 120 --type etc
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 100000 --time 120 --type etc
+    sleep 1
+    echo "******************** ETC END **********************************"
+    
+    # USR: 1600000, 1400000, 1200000, 1000000, 800000, 600000, 400000, 200000
+    echo "******************** USR START **********************************"
+    NITERS=3 runMutilateBench --bench mcd --qps 1900000 --time 120 --type usr
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 1800000 --time 120 --type usr
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 1700000 --time 120 --type usr
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 1600000 --time 120 --type usr
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 1500000 --time 120 --type usr
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 1400000 --time 120 --type usr
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 1300000 --time 120 --type usr
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 1200000 --time 120 --type usr
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 1100000 --time 120 --type usr
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 1000000 --time 120 --type usr
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 800000 --time 120 --type usr
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 600000 --time 120 --type usr
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 400000 --time 120 --type usr
+    sleep 1
+    NITERS=3 runMutilateBench --bench mcd --qps 200000 --time 120 --type usr
+    sleep 1
+    echo "******************** USR END **********************************"
+    
+    # ZYGOS: 250000 240000 230000 220000 210000 200000 180000 160000 140000 120000 100000 80000 60000 40000
+    echo "******************** ZYGOS START **********************************"
+    NITERS=3 runMutilateBench --qps 270000 --time 120 --bench zygos
+    sleep 1
+    NITERS=3 runMutilateBench --qps 260000 --time 120 --bench zygos
+    sleep 1
+    NITERS=3 runMutilateBench --qps 250000 --time 120 --bench zygos
+    sleep 1
+    NITERS=3 runMutilateBench --qps 240000 --time 120 --bench zygos
+    sleep 1
+    NITERS=3 runMutilateBench --qps 230000 --time 120 --bench zygos
+    sleep 1
+    NITERS=3 runMutilateBench --qps 220000 --time 120 --bench zygos
+    sleep 1
+    NITERS=3 runMutilateBench --qps 210000 --time 120 --bench zygos
+    sleep 1
+    NITERS=3 runMutilateBench --qps 200000 --time 120 --bench zygos
+    sleep 1
+    NITERS=3 runMutilateBench --qps 180000 --time 120 --bench zygos
+    sleep 1
+    NITERS=3 runMutilateBench --qps 160000 --time 120 --bench zygos
+    sleep 1
+    NITERS=3 runMutilateBench --qps 140000 --time 120 --bench zygos
+    sleep 1
+    NITERS=3 runMutilateBench --qps 120000 --time 120 --bench zygos
+    sleep 1
+    NITERS=3 runMutilateBench --qps 100000 --time 120 --bench zygos
+    sleep 1
+    NITERS=3 runMutilateBench --qps 80000 --time 120 --bench zygos
+    sleep 1
+    NITERS=3 runMutilateBench --qps 60000 --time 120 --bench zygos
+    sleep 1
+    NITERS=3 runMutilateBench --qps 40000 --time 120 --bench zygos
+    sleep 1
+    echo "******************** ZYGOS END **********************************"
+}
+
 
 "$@"
 
