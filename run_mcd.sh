@@ -169,6 +169,22 @@ function run4
     done
 }
 
+function runo2
+{
+    run4 zygos_pow_itr 200000 135 210
+    sleep 1
+    run4 zygos_pow_itr 140000 135 296
+    sleep 1
+    run4 zygos_pow_itr 70000 135 300
+    sleep 1
+    echo "pow_itr"
+    run4 zygos_pow_itr 70000 135 300
+    sleep 1
+    run4 zygos_pow_itr 70000 35 130
+    sleep 1
+    run4 zygos_pow_itr 70000 35 190
+}
+
 function run3
 {
     while true; do
@@ -253,4 +269,38 @@ function run
     done
 }
 
-$1 $2 $3 $4 $5
+function cleanAll
+{
+    ssh $SERVER "pkill memcached"
+    sleep 0.5
+    ssh $SERVER "pkill silotpcc-linux"
+    sleep 0.5
+    pkill mutilate
+    sleep 0.5
+    ssh 192.168.1.201 pkill mutilate
+    sleep 0.5
+    ssh 192.168.1.202 pkill mutilate
+    sleep 0.5
+    ssh 192.168.1.203 pkill mutilate
+    sleep 0.5
+    ssh 192.168.1.204 pkill mutilate
+    sleep 0.5
+    ssh 192.168.1.205 pkill mutilate
+    sleep 0.5
+
+}
+
+function runMutilateBench
+{
+    for i in `seq 1 1 $NITERS`;
+    do
+	for d in $RXU;
+	do
+	    cleanAll
+	    timeout 600 python3 -u mutilate_bench.py "$@"
+	done
+    done
+}
+
+"$@"
+
