@@ -575,8 +575,12 @@ def runZygos(mqps):
 
     runRemoteCommandOut("pkill silotpcc-linux")
     if qps > 0.0:
-        end_counter(qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th)
-        
+        if SEARCH:
+            print(read_99th)
+        else:
+            end_counter(qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th)
+
+            
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--bench", help="Type of benchmark [mcd, zygos]")

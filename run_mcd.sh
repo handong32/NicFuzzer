@@ -290,11 +290,11 @@ function searchPowerLimit
 {
     # ETC: 900000, 800000, 700000, 600000, 500000, 400000
     sla=500
-    #
-    for mqps in 500000, 600000, 700000, 800000, 900000; do
+    # 500000 600000 700000 800000 900000
+    for mqps in 700000 800000 900000; do
 	satisfy_sla=0
 	violate_sla=0
-	for rapl in 35 40 50 60 70 80 90 100 110;
+	for rapl in 35 40 50 60 70 80 90 100 110 120 130;
 	do
 	    NITERS=1 runMutilateBench --qps $mqps --time 60 --rapl $rapl --bench mcd --type etc --pow_search_enable 1 > searchPowerLimit.log
     	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
@@ -323,8 +323,103 @@ function searchPowerLimit
 	    fi
 	done	
     done
-    
 }
+
+function searchPowerLimitUSRSILO
+{
+    # USR: 1500000, 1400000, 1200000, 1000000, 800000, 600000, 400000, 200000
+    echo "USR start"
+    sla=500
+    TYPE='usr'
+    # 1400000 
+    for mqps in 1300000 1200000 1100000 1000000 800000 600000 400000; do
+    	satisfy_sla=0
+    	violate_sla=0
+    	for rapl in 35 40 50 60 70 80 90 100 110 120 130;
+    	do
+          echo "MCD USR RAPL=$rapl mqps=$mqps"
+    	    NITERS=1 runMutilateBench --qps $mqps --time 60 --rapl $rapl --bench mcd --type $TYPE --pow_search_enable 1 > searchPowerLimit.log
+    	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+    	    if [ $read99th -lt $sla ]
+    	    then
+    		echo "MCD USR RAPL=$rapl mqps=$mqps $read99th < SLA"
+    		satisfy_sla=$rapl
+    		break
+    	    else
+    		violate_sla=$rapl
+    		echo "MCD USR RAPL=$rapl mqps=$mqps SLA < $read99th"
+    	    fi
+    	done
+
+	echo "satisfiy_sla=$satisfy_sla violate_sla=$violate_sla"
+    
+	violate_sla=$((violate_sla+2))
+	satisfy_sla=$((satisfy_sla+4))
+	for ((rapl=$violate_sla; rapl < $satisfy_sla; rapl+=2)); do
+    	    NITERS=1 runMutilateBench --qps $mqps --time 60 --rapl $rapl --bench mcd --type $TYPE --pow_search_enable 1 > searchPowerLimit.log
+    	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+    	    echo "MCD USR RAPL=$rapl mqps=$mqps 99percentile=$read99th"
+    	    if [ $read99th -lt $sla ]
+    	    then
+    		echo "MCD USR RAPL=$rapl mqps=$mqps $read99th < SLA"
+    		NITERS=3 runMutilateBench --qps $mqps --time 120 --rapl $rapl --bench mcd --type $TYPE --verbose 1 >> mcd_data/10_25_19_MCD_USR_QPS_$mqps.log
+    		break
+    	    fi
+	done
+
+	sleep 1
+	cleanAll
+	sleep 1
+    done
+
+    sleep 1
+    cleanAll
+    sleep 1
+
+    echo "SILO start" 
+    # SILO: 250000 240000 230000 220000 210000 200000 180000 160000 140000
+    sla=1000
+    for mqps in 240000 230000 220000 210000 200000 180000 160000 140000; do
+	satisfy_sla=0
+	violate_sla=0
+	for rapl in 35 40 50 60 70 80 90 100 110 120 130;
+	do
+	    echo "SILO RAPL=$rapl mqps=$mqps"
+	    NITERS=1 runMutilateBench --qps $mqps --time 60 --rapl $rapl --bench zygos --pow_search_enable 1 > searchPowerLimit.log
+	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+    	    if [ $read99th -lt $sla ]
+    	    then
+    		echo "SILO RAPL=$rapl mqps=$mqps $read99th < SLA"
+    		satisfy_sla=$rapl
+    		break
+    	    else
+    		violate_sla=$rapl
+    		echo "SILO RAPL=$rapl mqps=$mqps SLA < $read99th"
+    	    fi
+	done
+
+	echo "satisfiy_sla=$satisfy_sla violate_sla=$violate_sla"
+	
+	violate_sla=$((violate_sla+2))
+	satisfy_sla=$((satisfy_sla+4))
+	for ((rapl=$violate_sla; rapl < $satisfy_sla; rapl+=2)); do
+	    NITERS=1 runMutilateBench --qps $mqps --time 120 --rapl $rapl --bench zygos --pow_search_enable 1 > searchPowerLimit.log
+    	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+	    echo "SILO RAPL=$rapl mqps=$mqps 99percentile=$read99th"
+    	    if [ $read99th -lt $sla ]
+    	    then
+		echo "SILO RAPL=$rapl mqps=$mqps $read99th < SLA"
+		NITERS=3 runMutilateBench --qps $mqps --time 120 --rapl $rapl --bench zygos --verbose 1 >> mcd_data/10_25_19_MCD_SILO_QPS_$mqps.log
+    		break
+	    fi
+	done
+	
+	sleep 1
+	cleanAll
+	sleep 1
+    done
+}
+
 
 function runon2
 {
