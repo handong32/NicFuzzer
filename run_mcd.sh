@@ -4,7 +4,7 @@ export RXU=${RXU:='8'}
 export RXQ=${RXQ:='512'}
 export TXQ=${TXQ:='512'}
 export NITERS=${NITERS:='1'}
-export SERVER=${SERVER:=192.168.1.200}
+export SERVER=${SERVER:=192.168.1.230}
 export OUTFILE=${OUTFILE:=0}
 
 currdate=`date +%m_%d_%Y_%H_%M_%S`
@@ -271,6 +271,8 @@ function cleanAll
     sleep 0.5
     ssh 192.168.1.205 pkill mutilate
     sleep 0.5
+    ssh $SERVER ifup enp4s0f1
+    sleep 0.5
 
 }
 
@@ -278,12 +280,246 @@ function runMutilateBench
 {
     for i in `seq 1 1 $NITERS`;
     do
-	for d in $RXU;
-	do
-	    cleanAll
-	    timeout 600 python3 -u mutilate_bench.py "$@"
+	cleanAll
+	timeout 600 python3 -u mutilate_bench.py "$@"
+    done
+}
+
+function searchNIC
+{
+    qps=$1
+    itr=$2
+    workload=$3
+    type=$4
+
+    for((thresh=0; thresh<3; thresh++)); do
+	for((ring=0; ring<2; ring++)); do
+	    for((dtxmx=0; dtxmx<3; dtxmx++)); do
+    		for((dca=0; dca<2; dca++)); do
+		    if [ $workload = "mcd" ]; then
+			echo ""
+			echo "NITERS=1 runMutilateBench --bench $workload --qps $qps --time 120 --type $type --itr $itr --ring $ring --dtxmx $dtxmx --dca $dca --thresh $thresh --restartnic 1 --verbose 1"
+			NITERS=1 runMutilateBench --bench $workload --qps $qps --time 120 --type $type --itr $itr --ring $ring --dtxmx $dtxmx --dca $dca --thresh $thresh --restartnic 1 --verbose 1
+		    else
+			echo ""
+			echo "NITERS=1 runMutilateBench --bench $workload --qps $qps --time 120 --itr $itr --ring $ring --dtxmx $dtxmx --dca $dca --thresh $thresh --restartnic 1 --verbose 1"
+			NITERS=1 runMutilateBench --bench $workload --qps $qps --time 120 --itr $itr --ring $ring --dtxmx $dtxmx --dca $dca --thresh $thresh --restartnic 1 --verbose 1
+		    fi
+		    sleep 1
+		done
+	    done
 	done
     done
+}
+
+function runo3
+{
+    echo "runo3"
+    sleep 1
+    cleanAll
+    sleep 1
+
+    # ETC 400000,500000,600000,700000,800000,900000
+    #searchNIC 400000 378 mcd etc >> mcd_data/10_25_19_MCD_ETC_QPS_400000.log
+    #searchNIC 500000 358 mcd etc >> mcd_data/10_25_19_MCD_ETC_QPS_500000.log
+    #searchNIC 600000 344 mcd etc >> mcd_data/10_25_19_MCD_ETC_QPS_600000.log
+    #searchNIC 700000 334 mcd etc >> mcd_data/10_25_19_MCD_ETC_QPS_700000.log
+    #searchNIC 800000 300 mcd etc >> mcd_data/10_25_19_MCD_ETC_QPS_800000.log
+    searchNIC 900000 256 mcd etc >> mcd_data/10_25_19_MCD_ETC_QPS_900000.log
+
+    sleep 1
+    cleanAll
+    sleep 1
+    
+    #USR 400000,600000,800000,1000000,1100000,1200000,1300000,1400000,1500000
+    #searchNIC 400000 390 mcd usr >> mcd_data/10_25_19_MCD_USR_QPS_400000.log
+    #searchNIC 600000 378 mcd usr >> mcd_data/10_25_19_MCD_USR_QPS_600000.log
+    #searchNIC 800000 368 mcd usr >> mcd_data/10_25_19_MCD_USR_QPS_800000.log
+    #searchNIC 1000000 364 mcd usr >> mcd_data/10_25_19_MCD_USR_QPS_1000000.log
+    #searchNIC 1100000 356 mcd usr >> mcd_data/10_25_19_MCD_USR_QPS_1100000.log
+    #searchNIC 1200000 350 mcd usr >> mcd_data/10_25_19_MCD_USR_QPS_1200000.log
+    #searchNIC 1300000 332 mcd usr >> mcd_data/10_25_19_MCD_USR_QPS_1300000.log
+    #searchNIC 1400000 328 mcd usr >> mcd_data/10_25_19_MCD_USR_QPS_1400000.log
+    searchNIC 1500000 268 mcd usr >> mcd_data/10_25_19_MCD_USR_QPS_1500000.log
+
+    sleep 1
+    cleanAll
+    sleep 1
+
+    #SILO 140000,160000,180000,200000,210000,220000,230000,240000,250000
+    #searchNIC 140000 648 zygos 1 >> mcd_data/10_25_19_MCD_SILO_QPS_140000.log
+    #searchNIC 160000 640 zygos 1 >> mcd_data/10_25_19_MCD_SILO_QPS_160000.log
+    #searchNIC 180000 568 zygos 1 >> mcd_data/10_25_19_MCD_SILO_QPS_180000.log
+    #searchNIC 200000 500 zygos 1 >> mcd_data/10_25_19_MCD_SILO_QPS_200000.log
+    #searchNIC 210000 488 zygos 1 >> mcd_data/10_25_19_MCD_SILO_QPS_210000.log
+    #searchNIC 220000 298 zygos 1 >> mcd_data/10_25_19_MCD_SILO_QPS_220000.log
+    searchNIC 230000 188 zygos 1 >> mcd_data/10_25_19_MCD_SILO_QPS_230000.log
+    searchNIC 240000 168 zygos 1 >> mcd_data/10_25_19_MCD_SILO_QPS_240000.log
+    searchNIC 250000 48 zygos 1 >> mcd_data/10_25_19_MCD_SILO_QPS_250000.log
+}
+
+function searchITR
+{
+    # 600000 700000 800000
+    # sla=500
+    # TYPE='etc'
+    # for mqps in 900000; do
+    # 	satisfy_sla=0
+    # 	violate_sla=0
+    # 	for itr in 100 160 220 280 340 400 460 520;
+    # 	do
+    # 	    NITERS=1 runMutilateBench --qps $mqps --time 60 --itr $itr --bench mcd --type $TYPE --pow_search_enable 1 > searchPowerLimit.log
+    # 	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+    # 	    echo "ITR=$itr mqps=$mqps 99percentile=$read99th"
+    # 	    if [ $read99th -gt $sla ]
+    # 	    then
+    # 		satisfy_sla=$((itr-60))
+    # 		violate_sla=$itr
+    # 		echo "ITR=$itr mqps=$mqps SLA < $read99th"
+    # 	      	break
+    # 	    fi
+    # 	done
+
+    # 	violate_sla=$((violate_sla-10))
+    # 	echo "satisfiy_sla=$satisfy_sla violate_sla=$violate_sla"
+    # 	for((itr=$violate_sla; itr>$satisfy_sla; itr-=10)); do
+    # 	    NITERS=1 runMutilateBench --qps $mqps --time 60 --itr $itr --bench mcd --type $TYPE --pow_search_enable 1 > searchPowerLimit.log
+    # 	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+    # 	    echo "ITR=$itr mqps=$mqps 99percentile=$read99th"
+    # 	    if [ $read99th -lt $sla ]
+    # 	    then
+    # 		echo "ITR=$itr mqps=$mqps $read99th < SLA"
+    # 		satisfy_sla=$itr
+    # 		violate_sla=$((itr+10))
+    # 		break
+    # 	    fi
+    # 	done
+
+    # 	echo "satisfiy_sla=$satisfy_sla violate_sla=$violate_sla"
+    # 	for((itr=$satisfy_sla; itr<=$violate_sla; itr+=2)); do
+    # 	    NITERS=1 runMutilateBench --qps $mqps --time 60 --itr $itr --bench mcd --type $TYPE --pow_search_enable 1 > searchPowerLimit.log
+    # 	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+    # 	    echo "ITR=$itr mqps=$mqps 99percentile=$read99th"
+    # 	    if [ $read99th -gt $sla ]
+    # 	    then
+    # 		satisfy_sla=$((itr-2))
+    # 		echo "satisfy_sla=$satisfy_sla"
+    # 		#NITERS=1 runMutilateBench --qps $mqps --time 120 --itr $satisfy_sla --bench mcd --type $TYPE --verbose 1
+    # 		NITERS=3 runMutilateBench --qps $mqps --time 120 --itr $satisfy_sla --bench mcd --type $TYPE --verbose 1 >> mcd_data/10_25_19_MCD_ETC_QPS_$mqps.log
+    # 		break
+    # 	    fi
+    # 	done
+    # done
+
+    # sleep 1
+    # cleanAll
+    # sleep 1
+    
+    # USR: 600000 800000 1000000 1100000 1200000 1300000 1400000 1500000
+    # sla=500
+    # TYPE='usr'
+    # for mqps in 1300000; do
+    # 	satisfy_sla=0
+    # 	violate_sla=0
+    # 	for itr in 100 160 220 280 340 400 460 520;
+    # 	do
+    # 	    NITERS=1 runMutilateBench --qps $mqps --time 60 --itr $itr --bench mcd --type $TYPE --pow_search_enable 1 > searchPowerLimit.log
+    # 	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+    # 	    echo "ITR=$itr mqps=$mqps 99percentile=$read99th"
+    # 	    if [ $read99th -gt $sla ]
+    # 	    then
+    # 		satisfy_sla=$((itr-60))
+    # 		violate_sla=$itr
+    # 		echo "ITR=$itr mqps=$mqps SLA < $read99th"
+    # 	      	break
+    # 	    fi
+    # 	done
+
+    # 	violate_sla=$((violate_sla-10))
+    # 	echo "satisfiy_sla=$satisfy_sla violate_sla=$violate_sla"
+    # 	for((itr=$violate_sla; itr>$satisfy_sla; itr-=10)); do
+    # 	    NITERS=1 runMutilateBench --qps $mqps --time 60 --itr $itr --bench mcd --type $TYPE --pow_search_enable 1 > searchPowerLimit.log
+    # 	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+    # 	    echo "ITR=$itr mqps=$mqps 99percentile=$read99th"
+    # 	    if [ $read99th -lt $sla ]
+    # 	    then
+    # 		echo "ITR=$itr mqps=$mqps $read99th < SLA"
+    # 		satisfy_sla=$itr
+    # 		violate_sla=$((itr+10))
+    # 		break
+    # 	    fi
+    # 	done
+
+    # 	echo "satisfiy_sla=$satisfy_sla violate_sla=$violate_sla"
+    # 	for((itr=$satisfy_sla; itr<=$violate_sla; itr+=2)); do
+    # 	    NITERS=1 runMutilateBench --qps $mqps --time 60 --itr $itr --bench mcd --type $TYPE --pow_search_enable 1 > searchPowerLimit.log
+    # 	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+    # 	    echo "ITR=$itr mqps=$mqps 99percentile=$read99th"
+    # 	    if [ $read99th -gt $sla ]
+    # 	    then
+    # 		satisfy_sla=$((itr-2))
+    # 		echo "satisfy_sla=$satisfy_sla"
+    # 		#NITERS=1 runMutilateBench --qps $mqps --time 120 --itr $satisfy_sla --bench mcd --type $TYPE --verbose 1
+    # 		NITERS=3 runMutilateBench --qps $mqps --time 120 --itr $satisfy_sla --bench mcd --type $TYPE --verbose 1 >> mcd_data/10_25_19_MCD_USR_QPS_$mqps.log
+    # 		break
+    # 	    fi
+    # 	done
+    # done
+
+    # sleep 1
+    # cleanAll
+    # sleep 1
+    
+    #SILO: 140000 160000 180000 200000 210000 220000 230000 240000 250000
+    sla=1000
+    for mqps in 200000 210000 220000 230000; do
+    	satisfy_sla=0
+    	violate_sla=0
+    	for itr in 100 200 300 400 500 600 700 800 900;
+    	do
+    	    NITERS=1 runMutilateBench --qps $mqps --time 60 --itr $itr --bench zygos --pow_search_enable 1 > searchPowerLimit.log
+    	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+    	    echo "ITR=$itr mqps=$mqps 99percentile=$read99th"
+    	    if [ $read99th -gt $sla ]
+    	    then
+    		satisfy_sla=$((itr-60))
+    		violate_sla=$itr
+    		echo "ITR=$itr mqps=$mqps SLA < $read99th"
+    	      	break
+    	    fi
+    	done
+
+    	violate_sla=$((violate_sla-10))
+    	echo "satisfiy_sla=$satisfy_sla violate_sla=$violate_sla"
+    	for((itr=$violate_sla; itr>$satisfy_sla; itr-=10)); do
+    	    NITERS=1 runMutilateBench --qps $mqps --time 60 --itr $itr --bench zygos --pow_search_enable 1 > searchPowerLimit.log
+    	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+    	    echo "ITR=$itr mqps=$mqps 99percentile=$read99th"
+    	    if [ $read99th -lt $sla ]
+    	    then
+    		echo "ITR=$itr mqps=$mqps $read99th < SLA"
+    		satisfy_sla=$itr
+    		violate_sla=$((itr+10))
+    		break
+    	    fi
+    	done
+
+    	echo "satisfiy_sla=$satisfy_sla violate_sla=$violate_sla"
+    	for((itr=$satisfy_sla; itr<=$violate_sla; itr+=2)); do
+    	    NITERS=1 runMutilateBench --qps $mqps --time 60 --itr $itr --bench zygos --pow_search_enable 1 > searchPowerLimit.log
+    	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+    	    echo "ITR=$itr mqps=$mqps 99percentile=$read99th"
+    	    if [ $read99th -gt $sla ]
+    	    then
+    		satisfy_sla=$((itr-2))
+    		echo "satisfy_sla=$satisfy_sla"
+    		#NITERS=1 runMutilateBench --qps $mqps --time 120 --itr $satisfy_sla --bench zygos --verbose 1
+    		NITERS=3 runMutilateBench --qps $mqps --time 120 --itr $satisfy_sla --bench zygos --verbose 1 >> mcd_data/10_25_19_MCD_SILO_QPS_$mqps.log
+    		break
+    	    fi
+    	done
+    done
+
 }
 
 function searchPowerLimit
@@ -337,7 +573,7 @@ function searchPowerLimitUSRSILO
     	violate_sla=0
     	for rapl in 35 40 50 60 70 80 90 100 110 120 130;
     	do
-          echo "MCD USR RAPL=$rapl mqps=$mqps"
+            echo "MCD USR RAPL=$rapl mqps=$mqps"
     	    NITERS=1 runMutilateBench --qps $mqps --time 60 --rapl $rapl --bench mcd --type $TYPE --pow_search_enable 1 > searchPowerLimit.log
     	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
     	    if [ $read99th -lt $sla ]
@@ -352,7 +588,7 @@ function searchPowerLimitUSRSILO
     	done
 
 	echo "satisfiy_sla=$satisfy_sla violate_sla=$violate_sla"
-    
+	
 	violate_sla=$((violate_sla+2))
 	satisfy_sla=$((satisfy_sla+4))
 	for ((rapl=$violate_sla; rapl < $satisfy_sla; rapl+=2)); do

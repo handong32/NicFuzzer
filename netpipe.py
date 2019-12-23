@@ -387,8 +387,8 @@ def runBench(com):
     stdout, stderr = p1.communicate()
     print(stdout)
     print(stderr)
-    if 'Mbps' in str(stderr):
-        s = str(stderr).strip().split('-->')[1]
+    if 'Mbps' in str(stdout):
+        s = str(stdout).strip().split('-->')[1]
         t = s.split('Mbps')[0]
         return float(t.strip())
     else:
@@ -472,17 +472,53 @@ def runRand(msgl, msgu, niters):
     else:
         return tput,0,0,0,0,0,0
 
-'''
+def runRand2(msgl, msgu, niters):
+    port = 5666
+    runRemoteCommand(CSERVER, "pkill NPtcp")
+    time.sleep(0.5)
+    runLocalCommand("pkill NPtcp")
+    time.sleep(0.5)
+    itrstart = runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-1 | tr -s ' ' | cut -d ' ' -f 4")
+    runRemoteCommand (CSERVER2, "perf stat -a -D 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ NPtcp -l "+msgl+" -u "+msgu+" -p 0 -r -I -P "+str(port)+" -x")
+    time.sleep(1)
+    tput = runBench("taskset -c 1 NPtcp -h "+CSERVER+" -l "+msgl+" -u "+msgu+" -n "+ niters  +" -p 0 -r -I -P "+str(port)+" -x")
+    if tput > 0:
+        itrend = runRemoteCommandGet(CSERVER2, "cat /proc/interrupts | grep -m 1 enp4s0f1-TxRx-1 | tr -s ' ' | cut -d ' ' -f 4")
+        time.sleep(0.5)
+        output = runRemoteCommandGet(CSERVER2, "cat perf.out")
+        nins = 0
+        ncycles = 0
+        cache_misses = 0
+        joules = 0
+        ttime = 0.0
+        watts = -1
+        for l in str(output).split("\\n"):
+            print(l.strip())
+            f = list(filter(None, l.strip().split(' ')))
+            if 'cycles' in l:
+                ncycles = float(f[0].replace(',', ''))
+            if 'instructions' in l:
+                nins = float(f[0].replace(',', ''))
+            if 'LLC' in l:
+                cache_misses += float(f[0].replace(',', ''))
+            if 'Joules' in l:
+                joules += float(f[0])
+            if 'seconds' in l:
+                ttime = float(f[0])
+        watts = joules/ttime
+        return tput,nins,ncycles,watts,cache_misses,ttime,int(itrend)-int(itrstart)
+    else:
+        return tput,0,0,0,0,0,0
+
 if len(sys.argv) == 2:
     setITR(sys.argv[1])
-    tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(24576), str(20000))
-    ##tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(524288), str(4000))
+    tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand2(str(512), str(24576), str(20000))
     print("ITR=%d TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d TIME(s)=%f" % (int(sys.argv[1]), tput, int(nins), int(ncycles), int(cache_misses), watts, nitr, ttime))
 else:
     tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(24576), str(20000))
     #tput,nins,ncycles,watts,cache_misses,ttime,nitr = runRand(str(512), str(524288), str(4000))
     print("DefaultLinux=1 TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d TIME(s)=%f" % (tput, int(nins), int(ncycles), int(cache_misses), watts, nitr, ttime))
-''' 
+
 '''
 if updateNIC() == 1:
     npu = np.random.random_sample()
@@ -518,5 +554,5 @@ msg = np.random.randint(500, 20000)
 #    print("TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d TIME(s)=%f" % (tput, int(nins), int(ncycles), int(cache_misses), watts, nitr, ttime))
     #tput,nins,ncycles,watts,cache_misses,nitr = runStatic(str(msg))
     #print("TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d" % (tput, int(nins), int(ncycles), int(cache_misses), watts, nitr))
-tput,nins,ncycles,watts,cache_misses,nitr = runStatic(str(10000))
-print("TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d" % (tput, int(nins), int(ncycles), int(cache_misses), watts, nitr))
+#tput,nins,ncycles,watts,cache_misses,nitr = runStatic(str(10000))
+#print("TPUT=%f INSTRUCTIONS=%d CYCLES=%d LLC_MISS=%d WATTS=%f INTERRUPTS=%d" % (tput, int(nins), int(ncycles), int(cache_misses), watts, nitr))

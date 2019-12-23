@@ -11,8 +11,8 @@ import numpy as np
 import itertools
 import argparse
 
-MASTER = "192.168.1.200"
-CSERVER = "192.168.1.200"
+MASTER = "192.168.1.230"
+CSERVER = "192.168.1.230"
 CSERVER2 = "10.255.5.8"
 ITR = 666
 WTHRESH = 0
@@ -33,6 +33,7 @@ TYPE = 'etc'
 TIME = 120
 SEARCH = 0
 VERBOSE = 0
+TARGET_QPS=100000
 
 WORKLOADS = {
     #ETC = 75% GET, 25% SET
@@ -157,7 +158,92 @@ def end_counter(qps, read_avg, read_std, read_min, read_5th, read_50th, read_90t
     watts = (energy_pkg+energy_ram)/ttime
     ipc = instructions/float(cycles)
  
-    print("ITR=%d RAPL=%d QPS=%.2f READ_99TH=%.2f WATTS=%.2f QPS/WATT=%.2f LLC_MISSES=%d IPC=%.5f AVG_ITR_PER_CORE=%.2f TIME=%.2f CYCLES=%d INSTRUCTIONS=%d LLC_LOAD_MISSES=%d LLC_STORE_MISSES=%d NRG_PKG=%.2f NRG_RAM=%.2f READ_5TH=%.2f READ_50TH=%.2f READ_90TH=%.2f READ_95TH=%.2f ITR0=%d ITR1=%d ITR2=%d ITR3=%d ITR4=%d ITR5=%d ITR6=%d ITR7=%d ITR8=%d ITR9=%d ITR10=%d ITR11=%d ITR12=%d ITR13=%d ITR14=%d ITR15=%d" % (ITR, RAPL, qps, read_99th, watts, qps/watts, llc_load+llc_store, ipc, avg_itr, ttime, cycles, instructions, llc_load, llc_store, energy_pkg, energy_ram, read_5th, read_50th, read_90th, read_95th, ITRC[0], ITRC[1], ITRC[2], ITRC[3], ITRC[4], ITRC[5], ITRC[6], ITRC[7], ITRC[8], ITRC[9], ITRC[10], ITRC[11], ITRC[12], ITRC[13], ITRC[14], ITRC[15]))
+    print("ITR=%d RAPL=%d QPS=%.2f READ_99TH=%.2f WATTS=%.2f TARGET_QPS=%d QPS/WATT=%.2f LLC_MISSES=%d IPC=%.5f AVG_ITR_PER_CORE=%.2f TIME=%.2f CYCLES=%d INSTRUCTIONS=%d LLC_LOAD_MISSES=%d LLC_STORE_MISSES=%d NRG_PKG=%.2f NRG_RAM=%.2f READ_5TH=%.2f READ_50TH=%.2f READ_90TH=%.2f READ_95TH=%.2f ITR0=%d ITR1=%d ITR2=%d ITR3=%d ITR4=%d ITR5=%d ITR6=%d ITR7=%d ITR8=%d ITR9=%d ITR10=%d ITR11=%d ITR12=%d ITR13=%d ITR14=%d ITR15=%d RXRING=%d TXRING=%d DTXMXSZRQ=%d WTHRESH=%d PTHRESH=%d HTHRESH=%d DCA=%d" % (ITR, RAPL, qps, read_99th, watts, TARGET_QPS, qps/watts, llc_load+llc_store, ipc, avg_itr, ttime, cycles, instructions, llc_load, llc_store, energy_pkg, energy_ram, read_5th, read_50th, read_90th, read_95th, ITRC[0], ITRC[1], ITRC[2], ITRC[3], ITRC[4], ITRC[5], ITRC[6], ITRC[7], ITRC[8], ITRC[9], ITRC[10], ITRC[11], ITRC[12], ITRC[13], ITRC[14], ITRC[15], RXRING, TXRING, DTXMXSZRQ, WTHRESH, PTHRESH, HTHRESH, DCA))
+
+def updateRING(v):
+    global RXRING
+    global TXRING
+    
+    if v == 0:
+        RXRING = 512
+        TXRING = 512
+    else:
+        RXRING = 4092
+        TXRING = 4092
+    #print(RXRING, TXRING)
+    # RXRING
+    p1 = Popen(["ssh", CSERVER2, "ethtool -G enp4s0f1 rx", str(RXRING)], stdout=PIPE, stderr=PIPE)
+    p1.communicate()
+
+    # TXRING
+    p1 = Popen(["ssh", CSERVER2, "ethtool -G enp4s0f1 tx", str(TXRING)], stdout=PIPE, stderr=PIPE)
+    p1.communicate()
+    
+def updateTHRESH(v):
+    global WTHRESH
+    global HTHRESH
+    global PTHRESH
+    if v == 0:
+        PTHRESH = 12
+        HTHRESH = 4
+        WTHRESH = 4
+    elif v == 1:
+        PTHRESH = 0
+        HTHRESH = 16
+        WTHRESH = 16
+    elif v == 2:
+        PTHRESH = 12
+        HTHRESH = 0
+        WTHRESH = 0
+    p1 = Popen(["ssh", CSERVER2, "ethtool -C enp4s0f1 WTHRESH", str(WTHRESH)], stdout=PIPE, stderr=PIPE)
+    p1.communicate()
+    
+    p1 = Popen(["ssh", CSERVER2, "ethtool -C enp4s0f1 PTHRESH", str(PTHRESH)], stdout=PIPE, stderr=PIPE)
+    p1.communicate()
+
+    p1 = Popen(["ssh", CSERVER2, "ethtool -C enp4s0f1 HTHRESH", str(HTHRESH)], stdout=PIPE, stderr=PIPE)
+    p1.communicate()
+    
+def updateDTXMX(v):
+    global DTXMXSZRQ
+    if v == 0:
+        DTXMXSZRQ = 16
+    elif v == 1:
+        DTXMXSZRQ = 2046
+    elif v == 2:
+        DTXMXSZRQ = 4095
+    # DTXMXSZRQ 
+    p1 = Popen(["ssh", CSERVER2, "ethtool -C enp4s0f1 DTXMXSZRQ", str(DTXMXSZRQ)], stdout=PIPE, stderr=PIPE)
+    p1.communicate()
+    
+def updateDCA(v):
+    global DCA
+    if v == 0:
+        DCA = 1
+    else:
+        DCA = 4
+    # DCA
+    p1 = Popen(["ssh", CSERVER2, "ethtool -C enp4s0f1 DCA", str(DCA)], stdout=PIPE, stderr=PIPE)
+    p1.communicate()
+
+
+def rebootNIC():
+    p1 = Popen(["ssh", CSERVER2, "ifdown enp4s0f1"], stdout=PIPE, stderr=PIPE)
+    p1.communicate()
+    time.sleep(1)
+    
+    p1 = Popen(["ssh", CSERVER2, "ifup enp4s0f1"], stdout=PIPE, stderr=PIPE)
+    p1.communicate()
+    time.sleep(5)
+
+    for i in range(5):
+        p1 = Popen(["ping", "-c 3", CSERVER], stdout=PIPE)
+        output = p1.communicate()[0]
+        if "3 received" in str(output):
+            return 1
+        time.sleep(1)
+    print("enp40sf1 did not restart correctly")
+    return 0
         
 def updateNIC():
     global ITR
@@ -531,16 +617,19 @@ def runBenchQPS(mqps):
     time.sleep(1)
     runRemoteCommands("/root/tmp/zygos_mutilate/mutilate --agentmode --threads=12", "192.168.1.205")
     time.sleep(1)
-
-    runRemoteCommand("perf stat -a -D 4000 -I 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ memcached -u nobody -t 16 -m 16G -c 8192 -o hashpower=20 -b 8192 -l "+MASTER+" -B binary")
-
-    time.sleep(1)
-    runLocalCommandOut("taskset -c 1 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --loadonly --records=1000000 -K fb_key -V fb_value")
-
-    time.sleep(1)
-    qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th = runMutilateStatsAll("taskset -c 0 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --noload --agent=192.168.1.201,192.168.1.202,192.168.1.203,192.168.1.204,192.168.1.205 --threads=1 --records=1000000 "+WORKLOADS[TYPE]+" --depth=4 --measure_depth=1 --connections=16 --measure_connections=32 --measure_qps=2000 --qps="+str(mqps)+" --time="+str(TIME))
     
+    #runRemoteCommand("perf stat -a -D 4000 -I 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ memcached -u nobody -t 16 -m 16G -c 8192 -o hashpower=20 -b 8192 -l "+MASTER+" -B binary")
+    runRemoteCommand("perf stat -a -D 4000 -I 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ memcached -u nobody -t 16 -m 16G -c 8192 -b 8192 -l "+MASTER+" -B binary")
+    
+    time.sleep(1)
+    #runLocalCommandOut("taskset -c 1 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --loadonly --records=1000000 -K fb_key -V fb_value")
+    runLocalCommandOut("taskset -c 1 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --loadonly -K fb_key -V fb_value")
+    
+    time.sleep(1)
+    #qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th = runMutilateStatsAll("taskset -c 0 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --noload --agent=192.168.1.201,192.168.1.202,192.168.1.203,192.168.1.204,192.168.1.205 --threads=1 --records=1000000 "+WORKLOADS[TYPE]+" --depth=4 --measure_depth=1 --connections=16 --measure_connections=32 --measure_qps=2000 --qps="+str(mqps)+" --time="+str(TIME))
+    qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th = runMutilateStatsAll("taskset -c 0 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --noload --agent=192.168.1.201,192.168.1.202,192.168.1.203,192.168.1.204,192.168.1.205 --threads=1 "+WORKLOADS[TYPE]+" --depth=4 --measure_depth=1 --connections=16 --measure_connections=32 --measure_qps=2000 --qps="+str(mqps)+" --time="+str(TIME))
     runRemoteCommandOut("pkill memcached")
+    
     if qps > 0.0:
         if SEARCH:
             print(read_99th)
@@ -588,12 +677,17 @@ if __name__ == '__main__':
     parser.add_argument("--itr", help="Static interrupt delay [10, 500]")
     parser.add_argument("--qps", type=int, help="RPS rate")
     parser.add_argument("--time", type=int, help="Time in seconds to run")
+    parser.add_argument("--ring", type=int, help="TX and RX ring")
+    parser.add_argument("--dtxmx", type=int, help="DTXMXSZRQ")
+    parser.add_argument("--dca", type=int, help="DCA")
+    parser.add_argument("--thresh", type=int, help="PTHRESH, HTHRESH, WTHRESH")
+    parser.add_argument("--restartnic", type=int, help="restart nic")
     parser.add_argument("--type", help="Workload type [etc, usr]")
     parser.add_argument("--pow_search_enable", help="Limit printf for search power limit")
     parser.add_argument("--verbose", help="Print mcd raw stats")
     
     args = parser.parse_args()
-    mqps = 100000
+    rb = 1
     if args.rapl:
         #print("RAPL = ", args.rapl)
         setRAPL(args.rapl)
@@ -601,19 +695,35 @@ if __name__ == '__main__':
         #print("ITR = ", args.itr)
         setITR(args.itr)
     if args.qps:
-        mqps = args.qps
+        TARGET_QPS = args.qps
+        #print("TARGET_QPS = ", TARGET_QPS)
     if args.time:
         TIME = args.time
+        #print("TIME = ", TIME)
     if args.type:
         TYPE = args.type
+        #print("TYPE = ", TYPE)
     if args.pow_search_enable:
         SEARCH = 1
     if args.verbose:
         VERBOSE = 1
-        
-    if args.bench == "mcd":
-        runBenchQPS(mqps)
-    elif args.bench == "zygos":
-        runZygos(mqps)
-    else:
-        print("unknown ", args.bench, " --bench mcd or zygos")
+    #if args.ring >= 0:
+    #    updateRING(args.ring)
+    #if args.thresh >= 0:
+    #    updateTHRESH(args.thresh)
+    #if args.dca >= 0:
+    #    updateDCA(args.dca)
+    #if args.dtxmx >= 0:
+    #    updateDTXMX(args.dtxmx)
+    #if args.restartnic >= 0:
+    #    rb = rebootNIC()
+
+    if rb:
+        if args.bench == "mcd":
+            #print("BENCH = ", args.bench)
+            runBenchQPS(TARGET_QPS)
+        elif args.bench == "zygos":
+            runZygos(TARGET_QPS)
+        else:
+            print("unknown ", args.bench, " --bench mcd or zygos")
+            
