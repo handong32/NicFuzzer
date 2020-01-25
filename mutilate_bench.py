@@ -155,7 +155,8 @@ def end_counter(qps, read_avg, read_std, read_min, read_5th, read_50th, read_90t
             energy_ram += float(f[1].replace(',', ''))
             #print(tlist)
     ttime = tlist[len(tlist)-1] - tlist[0]
-    watts = (energy_pkg+energy_ram)/ttime
+    #watts = (energy_pkg+energy_ram)/ttime
+    watts = energy_pkg/ttime
     ipc = instructions/float(cycles)
  
     print("ITR=%d RAPL=%d QPS=%.2f READ_99TH=%.2f WATTS=%.2f TARGET_QPS=%d QPS/WATT=%.2f LLC_MISSES=%d IPC=%.5f AVG_ITR_PER_CORE=%.2f TIME=%.2f CYCLES=%d INSTRUCTIONS=%d LLC_LOAD_MISSES=%d LLC_STORE_MISSES=%d NRG_PKG=%.2f NRG_RAM=%.2f READ_5TH=%.2f READ_50TH=%.2f READ_90TH=%.2f READ_95TH=%.2f ITR0=%d ITR1=%d ITR2=%d ITR3=%d ITR4=%d ITR5=%d ITR6=%d ITR7=%d ITR8=%d ITR9=%d ITR10=%d ITR11=%d ITR12=%d ITR13=%d ITR14=%d ITR15=%d RXRING=%d TXRING=%d DTXMXSZRQ=%d WTHRESH=%d PTHRESH=%d HTHRESH=%d DCA=%d" % (ITR, RAPL, qps, read_99th, watts, TARGET_QPS, qps/watts, llc_load+llc_store, ipc, avg_itr, ttime, cycles, instructions, llc_load, llc_store, energy_pkg, energy_ram, read_5th, read_50th, read_90th, read_95th, ITRC[0], ITRC[1], ITRC[2], ITRC[3], ITRC[4], ITRC[5], ITRC[6], ITRC[7], ITRC[8], ITRC[9], ITRC[10], ITRC[11], ITRC[12], ITRC[13], ITRC[14], ITRC[15], RXRING, TXRING, DTXMXSZRQ, WTHRESH, PTHRESH, HTHRESH, DCA))
@@ -351,6 +352,7 @@ def updateNIC():
     #    TXRING = 4092
     
     '''
+    ** Linux: PTHRESH=32 HTHRESH=1 WTHRESH=1
     Notes about THRESH, PTHRESH, WTHRESH
 
     Transmit descriptor fetch setting is programmed in the TXDCTL[n] register per
@@ -604,9 +606,8 @@ def runMutilateStatsAll(com):
 
 def runBenchQPS(mqps):
     start_counter()
-    
-    #runLocalCommand("taskset -c 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 /root/tmp/mutilate/mutilate --agentmode --affinity --threads 15")
-    time.sleep(1)
+
+    time.sleep(1)    
     runRemoteCommands("/root/tmp/zygos_mutilate/mutilate --agentmode --threads=16", "192.168.1.201")
     time.sleep(1)
     runRemoteCommands("/root/tmp/zygos_mutilate/mutilate --agentmode --threads=16", "192.168.1.202")
@@ -618,16 +619,14 @@ def runBenchQPS(mqps):
     runRemoteCommands("/root/tmp/zygos_mutilate/mutilate --agentmode --threads=12", "192.168.1.205")
     time.sleep(1)
     
-    #runRemoteCommand("perf stat -a -D 4000 -I 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ memcached -u nobody -t 16 -m 16G -c 8192 -o hashpower=20 -b 8192 -l "+MASTER+" -B binary")
-    runRemoteCommand("perf stat -a -D 4000 -I 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ memcached -u nobody -t 16 -m 16G -c 8192 -b 8192 -l "+MASTER+" -B binary")
-    
+    runRemoteCommand("perf stat -a -D 4000 -I 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/,cstate_core/c3-residency/,cstate_core/c6-residency/,cstate_core/c7-residency/,cstate_pkg/c2-residency/,cstate_pkg/c3-residency/,cstate_pkg/c6-residency/,cstate_pkg/c7-residency/ memcached -u nobody -t 16 -m 16G -c 8192 -b 8192 -l "+MASTER+" -B binary")    
     time.sleep(1)
-    #runLocalCommandOut("taskset -c 1 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --loadonly --records=1000000 -K fb_key -V fb_value")
-    runLocalCommandOut("taskset -c 1 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --loadonly -K fb_key -V fb_value")
-    
+
+    runLocalCommandOut("taskset -c 1 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --loadonly -K fb_key -V fb_value")    
     time.sleep(1)
-    #qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th = runMutilateStatsAll("taskset -c 0 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --noload --agent=192.168.1.201,192.168.1.202,192.168.1.203,192.168.1.204,192.168.1.205 --threads=1 --records=1000000 "+WORKLOADS[TYPE]+" --depth=4 --measure_depth=1 --connections=16 --measure_connections=32 --measure_qps=2000 --qps="+str(mqps)+" --time="+str(TIME))
+    
     qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th = runMutilateStatsAll("taskset -c 0 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --noload --agent=192.168.1.201,192.168.1.202,192.168.1.203,192.168.1.204,192.168.1.205 --threads=1 "+WORKLOADS[TYPE]+" --depth=4 --measure_depth=1 --connections=16 --measure_connections=32 --measure_qps=2000 --qps="+str(mqps)+" --time="+str(TIME))
+    
     runRemoteCommandOut("pkill memcached")
     
     if qps > 0.0:
@@ -635,7 +634,31 @@ def runBenchQPS(mqps):
             print(read_99th)
         else:
             end_counter(qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th)
-        
+
+def runBenchLocalQPS(mqps):
+    start_counter()
+
+    time.sleep(1)
+    runLocalCommand("taskset -c 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 /root/tmp/zygos_mutilate/mutilate --agentmode --threads=15")        
+    time.sleep(1)
+    
+    runRemoteCommand("perf stat -a -D 4000 -I 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ memcached -u nobody -t 16 -m 16G -c 8192 -b 8192 -l "+MASTER+" -B binary")
+    time.sleep(1)
+
+    runLocalCommandOut("taskset -c 0 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --loadonly -K fb_key -V fb_value")
+    time.sleep(1)
+    
+    qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th = runMutilateStatsAll("taskset -c 0 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --noload --agent=localhost --threads=1 "+WORKLOADS[TYPE]+" --depth=4 --measure_depth=1 --connections=16 --measure_connections=32 --measure_qps=2000 --qps="+str(mqps)+" --time="+str(TIME))
+    
+    runRemoteCommandOut("pkill memcached")
+    
+    if qps > 0.0:
+        if SEARCH:
+            print(read_99th)
+        else:
+            end_counter(qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th)
+
+            
 #####################################################################################################
 #
 #
@@ -702,7 +725,7 @@ if __name__ == '__main__':
         #print("TIME = ", TIME)
     if args.type:
         TYPE = args.type
-        #print("TYPE = ", TYPE)
+        print("TYPE = ", TYPE)
     if args.pow_search_enable:
         SEARCH = 1
     if args.verbose:
@@ -721,9 +744,8 @@ if __name__ == '__main__':
     if rb:
         if args.bench == "mcd":
             #print("BENCH = ", args.bench)
-            runBenchQPS(TARGET_QPS)
-        elif args.bench == "zygos":
-            runZygos(TARGET_QPS)
+            #runBenchQPS(TARGET_QPS)
+            runBenchLocalQPS(TARGET_QPS)
         else:
             print("unknown ", args.bench, " --bench mcd or zygos")
             
