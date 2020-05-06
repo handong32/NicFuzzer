@@ -272,7 +272,7 @@ function runMutilateBench
 function runMQPS
 {
     for mqps in $MQPS; do
-	NITERS=$NITERS runMutilateBench --qps $mqps "$@"
+	NITERS=$NITERS  runMutilateBench --qps $mqps "$@"
 	sleep 1
     done
 }
@@ -412,6 +412,56 @@ function runo3
     searchNIC 230000 188 zygos 1 >> mcd_data/10_25_19_MCD_SILO_QPS_230000.log
     searchNIC 240000 168 zygos 1 >> mcd_data/10_25_19_MCD_SILO_QPS_240000.log
     searchNIC 250000 48 zygos 1 >> mcd_data/10_25_19_MCD_SILO_QPS_250000.log
+}
+
+function searchITRLocal
+{
+    sla=500
+    TYPE='usr'
+    for mqps in 10000 20000 40000 60000 80000 100000 200000 300000 400000 500000 600000 700000 800000 900000; do
+	NITERS=1 runMutilateBenchLocal --qps $mqps --time 60 --itr 16 --bench mcd --type $TYPE
+    	satisfy_sla=0
+    	violate_sla=0
+    	for itr in 100 160 220 280 340 400 460 500;
+    	do
+    	    NITERS=1 runMutilateBenchLocal --qps $mqps --time 60 --itr $itr --bench mcd --type $TYPE --pow_search_enable 1 > searchPowerLimit.log
+    	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+	    cat searchPowerLimit.log
+    	    echo "ITR=$itr mqps=$mqps 99percentile=$read99th"
+    	    if [ $read99th -gt $sla ]
+    	    then
+    		satisfy_sla=$((itr-60))
+    		violate_sla=$itr
+    		echo "ITR=$itr mqps=$mqps SLA < $read99th"
+    	      	break
+    	    fi
+    	done
+
+    	violate_sla=$((violate_sla-10))
+    	echo "satisfiy_sla=$satisfy_sla violate_sla=$violate_sla"
+    	for((itr=$violate_sla; itr>$satisfy_sla; itr-=10)); do
+    	    NITERS=1 runMutilateBenchLocal --qps $mqps --time 60 --itr $itr --bench mcd --type $TYPE --pow_search_enable 1 > searchPowerLimit.log
+    	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+	    cat searchPowerLimit.log
+    	    echo "ITR=$itr mqps=$mqps 99percentile=$read99th"
+    	    if [ $read99th -lt $sla ]
+    	    then
+    		echo "ITR=$itr mqps=$mqps $read99th < SLA"
+    		satisfy_sla=$itr
+    		violate_sla=$((itr+10))
+    		break
+    	    fi
+    	done
+
+	violate_sla=$((violate_sla+10))
+    	echo "satisfiy_sla=$satisfy_sla violate_sla=$violate_sla"
+    	for((itr=$satisfy_sla; itr<=$violate_sla; itr+=2)); do
+    	    NITERS=1 runMutilateBenchLocal --qps $mqps --time 60 --itr $itr --bench mcd --type $TYPE --pow_search_enable 1 > searchPowerLimit.log
+    	    read99th=$(tail -n 1 searchPowerLimit.log | cut -d. -f1)
+	    cat searchPowerLimit.log
+    	    echo "ITR=$itr mqps=$mqps 99percentile=$read99th"
+    	done
+    done
 }
 
 function searchITR

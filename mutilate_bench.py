@@ -48,15 +48,18 @@ WORKLOADS = {
 '''
 MOC NODES:
 +-----------+
-| Nodes (8) |
+| Nodes (7) |
 +-----------+
 |  neu-5-25  | -> Intel(R) Xeon(R) CPU E5-2630L v2 @ 2.40GHz, 126 GB, 12 cores, Ubuntu 18.04, 4.15.1, 82599ES -> 192.168.1.205: mutilate
 |  neu-5-24  | -> Intel(R) Xeon(R) CPU E5-2630L v2 @ 2.40GHz, 126 GB, 12 cores, Ubuntu 18.04, 4.15.1, 82599ES -> 192.168.1.204: mutilate
-|  neu-5-10  | -> Intel(R) Xeon(R) CPU E5-2690 0 @ 2.90GHz, 126 GB, RHEL 7.7, 3.10.0, Solarflare Communications SFC9120 10G Ethernet Controller -> 192.168.1.203: mutilate
-|  neu-5-11  | -> Intel(R) Xeon(R) CPU E5-2690 0 @ 2.90GHz, 126 GB, RHEL 7.7, 3.10.0, 82599ES -> 192.168.1.202: mutilate
-|  neu-15-8  | -> Intel(R) Xeon(R) CPU E5-2690 0 @ 2.90GHz, 252 GB, Ubuntu 18.04, 4.15.1, 82599ES -> 192.168.1.201: mutilate
 |  neu-5-9   | -> Intel(R) Xeon(R) CPU E5-2690 0 @ 2.90GHz, 126 GB, Ubuntu 18.04, 5.0.0, 82599ES, 192.168.1.20: launcher
 |  neu-5-8   | -> Intel(R) Xeon(R) CPU E5-2690 0 @ 2.90GHz, 126 GB, Ubuntu 18.04, 4.15.1, 82599ES, 192.168.1.200: nic server
+|  neu-5-11  | -> Intel(R) Xeon(R) CPU E5-2690 0 @ 2.90GHz, 126 GB, RHEL 7.7, 3.10.0, 82599ES -> 192.168.1.202: mutilate
+|  neu-3-8   | -> Intel(R) Xeon(R) CPU E5-2690 0 @ 2.90GHz, 126 GB, Ethernet controller: Solarflare Communications SFC9120 10G Ethernet Controller
+|  neu-15-8  | -> Intel(R) Xeon(R) CPU E5-2690 0 @ 2.90GHz, 252 GB, Ethernet controller: Intel Corporation 82599ES 10-Gigabit SFI/SFP+
+
+   neu-19-33   -> model name	: Intel(R) Xeon(R) CPU E5-2660 0 @ 2.20GHz
+
 +------------+
 
  192.168.1.201,192.168.1.202,192.168.1.203,192.168.1.204,192.168.1.205
@@ -131,7 +134,20 @@ def end_counter(qps, read_avg, read_std, read_min, read_5th, read_50th, read_90t
     ipc = 0.0
     avg_itr = np.average(ITRC)
     tlist = []
+
+    c1_usage = 0
+    c1E_usage = 0
+    c3_usage = 0
+    c6_usage = 0
+    c7_usage = 0
     
+    pc1_usage = 0
+    pc1E_usage = 0
+    pc3_usage = 0
+    pc6_usage = 0
+    pc7_usage = 0
+    
+    count = 0    
     for l in str(output).split("\\n"):
         #print(l.strip())
         f = list(filter(None, l.strip().split(' ')))            
@@ -154,12 +170,35 @@ def end_counter(qps, read_avg, read_std, read_min, read_5th, read_50th, read_90t
             tlist.append(float(f[0].replace(',', '')))
             energy_ram += float(f[1].replace(',', ''))
             #print(tlist)
+        if 'C1_usage' in l:
+            if count == 1:
+                c1_usage += (float(f[1]) - pc1_usage)
+            pc1_usage = float(f[1])
+        if 'C1E_usage' in l:
+            if count == 1:
+                c1E_usage += (float(f[1]) - pc1E_usage)
+            pc1E_usage = float(f[1])            
+        if 'C3_usage' in l:
+            if count == 1:
+                c3_usage += (float(f[1]) - pc3_usage)
+            pc3_usage = float(f[1])            
+        if 'C6_usage' in l:
+            if count == 1:
+                c6_usage += (float(f[1]) - pc6_usage)
+            pc6_usage = float(f[1])            
+        if 'C7_usage' in l:
+            if count == 1:
+                c7_usage += (float(f[1]) - pc7_usage)
+            pc7_usage = float(f[1])
+            if count == 0:
+                count = 1
+    
     ttime = tlist[len(tlist)-1] - tlist[0]
     #watts = (energy_pkg+energy_ram)/ttime
     watts = energy_pkg/ttime
     ipc = instructions/float(cycles)
  
-    print("ITR=%d RAPL=%d QPS=%.2f READ_99TH=%.2f WATTS=%.2f TARGET_QPS=%d QPS/WATT=%.2f LLC_MISSES=%d IPC=%.5f AVG_ITR_PER_CORE=%.2f TIME=%.2f CYCLES=%d INSTRUCTIONS=%d LLC_LOAD_MISSES=%d LLC_STORE_MISSES=%d NRG_PKG=%.2f NRG_RAM=%.2f READ_5TH=%.2f READ_50TH=%.2f READ_90TH=%.2f READ_95TH=%.2f ITR0=%d ITR1=%d ITR2=%d ITR3=%d ITR4=%d ITR5=%d ITR6=%d ITR7=%d ITR8=%d ITR9=%d ITR10=%d ITR11=%d ITR12=%d ITR13=%d ITR14=%d ITR15=%d RXRING=%d TXRING=%d DTXMXSZRQ=%d WTHRESH=%d PTHRESH=%d HTHRESH=%d DCA=%d" % (ITR, RAPL, qps, read_99th, watts, TARGET_QPS, qps/watts, llc_load+llc_store, ipc, avg_itr, ttime, cycles, instructions, llc_load, llc_store, energy_pkg, energy_ram, read_5th, read_50th, read_90th, read_95th, ITRC[0], ITRC[1], ITRC[2], ITRC[3], ITRC[4], ITRC[5], ITRC[6], ITRC[7], ITRC[8], ITRC[9], ITRC[10], ITRC[11], ITRC[12], ITRC[13], ITRC[14], ITRC[15], RXRING, TXRING, DTXMXSZRQ, WTHRESH, PTHRESH, HTHRESH, DCA))
+    print("ITR=%d RAPL=%d QPS=%.2f READ_99TH=%.2f WATTS=%.2f TARGET_QPS=%d QPS/WATT=%.2f C1_usage=%.2f C1E_usage=%.2f C3_usage=%.2f C6_usage=%.2f C7_usage=%.2f LLC_MISSES=%d IPC=%.5f AVG_ITR_PER_CORE=%.2f TIME=%.2f CYCLES=%d INSTRUCTIONS=%d LLC_LOAD_MISSES=%d LLC_STORE_MISSES=%d NRG_PKG=%.2f NRG_RAM=%.2f READ_5TH=%.2f READ_50TH=%.2f READ_90TH=%.2f READ_95TH=%.2f ITR0=%d ITR1=%d ITR2=%d ITR3=%d ITR4=%d ITR5=%d ITR6=%d ITR7=%d ITR8=%d ITR9=%d ITR10=%d ITR11=%d ITR12=%d ITR13=%d ITR14=%d ITR15=%d RXRING=%d TXRING=%d DTXMXSZRQ=%d WTHRESH=%d PTHRESH=%d HTHRESH=%d DCA=%d" % (ITR, RAPL, qps, read_99th, watts, TARGET_QPS, qps/watts, c1_usage, c1E_usage, c3_usage, c6_usage, c7_usage, llc_load+llc_store, ipc, avg_itr, ttime, cycles, instructions, llc_load, llc_store, energy_pkg, energy_ram, read_5th, read_50th, read_90th, read_95th, ITRC[0], ITRC[1], ITRC[2], ITRC[3], ITRC[4], ITRC[5], ITRC[6], ITRC[7], ITRC[8], ITRC[9], ITRC[10], ITRC[11], ITRC[12], ITRC[13], ITRC[14], ITRC[15], RXRING, TXRING, DTXMXSZRQ, WTHRESH, PTHRESH, HTHRESH, DCA))
 
 def updateRING(v):
     global RXRING
@@ -618,7 +657,8 @@ def runBenchQPS(mqps):
     time.sleep(1)
     runRemoteCommands("/root/tmp/zygos_mutilate/mutilate --agentmode --threads=12", "192.168.1.205")
     time.sleep(1)
-    
+
+    #https://elixir.bootlin.com/linux/v4.15/source/arch/x86/events/intel/cstate.c
     runRemoteCommand("perf stat -a -D 4000 -I 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/,cstate_core/c3-residency/,cstate_core/c6-residency/,cstate_core/c7-residency/,cstate_pkg/c2-residency/,cstate_pkg/c3-residency/,cstate_pkg/c6-residency/,cstate_pkg/c7-residency/ memcached -u nobody -t 16 -m 16G -c 8192 -b 8192 -l "+MASTER+" -B binary")    
     time.sleep(1)
 
@@ -631,6 +671,7 @@ def runBenchQPS(mqps):
     
     if qps > 0.0:
         if SEARCH:
+            end_counter(qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th)
             print(read_99th)
         else:
             end_counter(qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th)
@@ -639,7 +680,8 @@ def runBenchLocalQPS(mqps):
     start_counter()
 
     time.sleep(1)
-    runLocalCommand("taskset -c 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 /root/tmp/zygos_mutilate/mutilate --agentmode --threads=15")        
+    #runLocalCommand("taskset -c 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 /root/tmp/zygos_mutilate/mutilate --agentmode --threads=15")
+    #runLocalCommand("taskset -c 1 /root/tmp/zygos_mutilate/mutilate --agentmode --threads=1")       
     time.sleep(1)
     
     runRemoteCommand("perf stat -a -D 4000 -I 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/ memcached -u nobody -t 16 -m 16G -c 8192 -b 8192 -l "+MASTER+" -B binary")
@@ -648,12 +690,13 @@ def runBenchLocalQPS(mqps):
     runLocalCommandOut("taskset -c 0 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --loadonly -K fb_key -V fb_value")
     time.sleep(1)
     
-    qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th = runMutilateStatsAll("taskset -c 0 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --noload --agent=localhost --threads=1 "+WORKLOADS[TYPE]+" --depth=4 --measure_depth=1 --connections=16 --measure_connections=32 --measure_qps=2000 --qps="+str(mqps)+" --time="+str(TIME))
+    qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th = runMutilateStatsAll("taskset -c 0 /root/tmp/zygos_mutilate/mutilate --binary -s "+MASTER+" --agent=localhost --noload --threads=1 "+WORKLOADS[TYPE]+" --depth=1 --measure_depth=1 --connections=16 --measure_connections=32 --measure_qps=2000 --qps="+str(mqps)+" --time="+str(TIME))
     
     runRemoteCommandOut("pkill memcached")
     
     if qps > 0.0:
         if SEARCH:
+            end_counter(qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th)
             print(read_99th)
         else:
             end_counter(qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th)
@@ -692,7 +735,120 @@ def runZygos(mqps):
         else:
             end_counter(qps, read_avg, read_std, read_min, read_5th, read_50th, read_90th, read_95th, read_99th)
 
+def test():
+    output = runRemoteCommandGet(MASTER, "cat perf.out")
+
+    poll_usage = 0
+    c1_usage = 0
+    c1E_usage = 0
+    c3_usage = 0
+    c6_usage = 0
+    c7_usage = 0
+
+    poll_time = 0
+    c1_time = 0
+    c1E_time = 0
+    c3_time = 0
+    c6_time = 0
+    c7_time = 0
+    
+    ppoll_usage = 0
+    pc1_usage = 0
+    pc1E_usage = 0
+    pc3_usage = 0
+    pc6_usage = 0
+    pc7_usage = 0
+
+    ppoll_time = 0
+    pc1_time = 0
+    pc1E_time = 0
+    pc3_time = 0
+    pc6_time = 0
+    pc7_time = 0
+    
+    count = 0
+    for l in str(output).split("\\n"):
+        f = list(filter(None, l.strip().split(' ')))
+
+        if 'POLL_usage' in l:
+            if count == 1:
+                poll_usage += (int(f[1]) - ppoll_usage)
+            ppoll_usage = int(f[1])
             
+        if 'C1_usage' in l:
+            if count == 1:
+                c1_usage += (int(f[1]) - pc1_usage)
+            pc1_usage = int(f[1])
+    
+        if 'C1E_usage' in l:
+            if count == 1:
+                c1E_usage += (int(f[1]) - pc1E_usage)
+            pc1E_usage = int(f[1])
+            
+        if 'C3_usage' in l:
+            if count == 1:
+                c3_usage += (int(f[1]) - pc3_usage)
+            pc3_usage = int(f[1])
+            
+        if 'C6_usage' in l:
+            if count == 1:
+                c6_usage += (int(f[1]) - pc6_usage)
+            pc6_usage = int(f[1])
+
+        if 'POLL_time' in l:
+            if count == 1:
+                poll_time += (int(f[1]) - ppoll_time)
+            ppoll_time = int(f[1])
+            
+        if 'C1_time' in l:
+            if count == 1:
+                c1_time += (int(f[1]) - pc1_time)
+            pc1_time = int(f[1])
+    
+        if 'C1E_time' in l:
+            if count == 1:
+                c1E_time += (int(f[1]) - pc1E_time)
+            pc1E_time = int(f[1])
+            
+        if 'C3_time' in l:
+            if count == 1:
+                c3_time += (int(f[1]) - pc3_time)
+            pc3_time = int(f[1])
+            
+        if 'C6_time' in l:
+            if count == 1:
+                c6_time += (int(f[1]) - pc6_time)
+            pc6_time = int(f[1])
+
+        if 'C7_time' in l:
+            if count == 1:
+                c7_time += (int(f[1]) - pc7_time)
+            pc7_time = int(f[1])
+            
+        if 'C7_usage' in l:
+            if count == 1:
+                c7_usage += (int(f[1]) - pc7_usage)
+            pc7_usage = int(f[1])
+            if count == 0:
+                count = 1
+
+    print("POLL usage", poll_usage)
+    print("C1 usage", c1_usage)
+    print("C1E usage", c1E_usage)
+    print("C3 usage", c3_usage)
+    print("C6 usage", c6_usage)
+    print("C7 usage", c7_usage)
+
+    print("")
+    
+    print("POLL time", poll_time)
+    print("C1 time", c1_time)
+    print("C1E time", c1E_time)
+    print("C3 time", c3_time)
+    print("C6 time", c6_time)
+    print("C7 time", c7_time)
+    print("total", poll_time+c1_time+c1E_time+c3_time+c6_time+c7_time)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--bench", help="Type of benchmark [mcd, zygos]")
@@ -746,6 +902,8 @@ if __name__ == '__main__':
             #print("BENCH = ", args.bench)
             #runBenchQPS(TARGET_QPS)
             runBenchLocalQPS(TARGET_QPS)
+        elif args.bench == "test":
+            test()
         else:
             print("unknown ", args.bench, " --bench mcd or zygos")
             
