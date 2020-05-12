@@ -17,7 +17,7 @@ ITR = 666
 RAPL = 136
 
 com_dict = {
-    "com1" : "ssh 192.168.1.11 taskset -c 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 /dev/shm/wrk -t1 -c1 -d30s http://192.168.1.230:6666/index.html --latency",
+    "com1" : "ssh 192.168.1.11 taskset -c 1 /dev/shm/wrk -t1 -c1 -d30s http://192.168.1.230:6666/index.html --latency",
     "com512" : "ssh 192.168.1.11 taskset -c 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 /dev/shm/wrk -t16 -c512 -d30s http://192.168.1.230:6666/index.html --latency"
 }
 
@@ -93,10 +93,18 @@ def setDVFS(v):
     p1.communicate()
     time.sleep(0.5)
     FREQ = v
-            
+
+def setITR(v):
+    global ITR
+    p1 = Popen(["ssh", SERVER, "ethtool -C enp4s0f1 rx-usecs", v], stdout=PIPE, stderr=PIPE)
+    p1.communicate()    
+    time.sleep(0.5)
+    ITR = int(v)
+    
 def runWrk():
+    time.sleep(2)
     output = runRemoteCommandGet("pkill node")
-    time.sleep(1)
+    time.sleep(2)
     
     runRemoteCommand("perf stat -C 1 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/ -x , taskset -c 1 /dev/shm/node /dev/shm/hello_http.js")
     time.sleep(0.5)    
@@ -123,7 +131,7 @@ def runWrk():
         print(l.strip())
 
     
-    print("*** ", COM, " RAPL:", RAPL, " FREQ:", FREQ, " Requests: ", req, " Joules: ", joules)
+    print("*** ", COM, " ITR:", ITR, " RAPL:", RAPL, " FREQ:", FREQ, " Requests: ", req, " Joules: ", joules)
         
         
 if __name__ == '__main__':
@@ -131,6 +139,7 @@ if __name__ == '__main__':
     parser.add_argument("--rapl", help="Rapl power limit [46, 136]")
     parser.add_argument("--dvfs", help="Cpu frequency [1.2, 2.9 GHz]")
     parser.add_argument("--com", help="com1 == -t1 -c1, com512 == -t16 -c512")
+    parser.add_argument("--itr", help="Static interrupt delay [10, 1000]")
     
     args = parser.parse_args()
     if args.rapl:
@@ -139,6 +148,8 @@ if __name__ == '__main__':
         setDVFS(args.dvfs)
     if args.com:
         COM = args.com
+    if args.itr:
+        setITR(args.itr)
         
     init()
     runWrk()

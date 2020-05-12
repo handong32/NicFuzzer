@@ -21,5 +21,19 @@ function run
     done
 }
 
+function run2
+{
+    for i in `seq 10 100 900`; # 8
+    do
+	for d in $ghzs; # 17
+	do
+	    for r in `seq 136 -8 46`; # 9
+	    do	    
+		timeout 120 python3 -u ./nodejs_bench.py --rapl $r --dvfs $d --com "com512" --itr $i
+	    done
+	done
+    done
+}
+
 
 $1
