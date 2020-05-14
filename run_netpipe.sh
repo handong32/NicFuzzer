@@ -12,7 +12,6 @@ rapls="136 86 46"
 function set_dynamic
 {
     set -x
-    set -e
     
     ssh 10.255.5.8 ethtool -C enp4s0f1 rx-usecs 1
     sleep 1
@@ -32,7 +31,6 @@ function set_dynamic
 function set_static
 {
     set -x
-    set -e
     
     ssh 10.255.5.8 ethtool -C enp4s0f1 rx-usecs 2
     sleep 1
@@ -60,7 +58,7 @@ function run
     do
 	for d in $ghzs;
 	do
-	    timeout 120 python3 -u ./netpipe_bench.py --dvfs $d --msg 64 --iter 200000 --rapl $r
+	    timeout 120 python3 -u ./netpipe_bench.py --dvfs $d --msg 64 --iter 700000 --rapl $r
 	    sleep 1
 	    timeout 120 python3 -u ./netpipe_bench.py --dvfs $d --msg 1024 --iter 200000 --rapl $r
 	    sleep 1
@@ -84,7 +82,7 @@ function run
 	do
 	    for i in $itrs;
 	    do
-		timeout 120 python3 -u ./netpipe_bench.py --dvfs $d --msg 64 --iter 200000 --itr $i --rapl $r
+		timeout 120 python3 -u ./netpipe_bench.py --dvfs $d --msg 64 --iter 700000 --itr $i --rapl $r
 		sleep 1
 		timeout 120 python3 -u ./netpipe_bench.py --dvfs $d --msg 1024 --iter 200000 --itr $i --rapl $r
 		sleep 1

@@ -121,7 +121,7 @@ def runNP():
             tmp = list(filter(None, l.strip().split(',')))
             joules = float(tmp[0])
             break
-        #print(l.strip())
+        print(l.strip())
   
     print("*** "," ITR:", ITR, " RAPL:", RAPL, " FREQ:", FREQ, " MSG:", MSG, " ITER:", ITER, " TPUT:", tput, " LATENCY:", lat, " TIME:", secs, " Joules:", joules)
  

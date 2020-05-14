@@ -13,12 +13,14 @@ import argparse
 
 SERVER = "192.168.1.230"
 
-ITR = 666
+ITR = "Dynamic"
 RAPL = 136
 
 com_dict = {
-    "com1" : "ssh 192.168.1.11 taskset -c 1 /dev/shm/wrk -t1 -c1 -d30s http://192.168.1.230:6666/index.html --latency",
-    "com512" : "ssh 192.168.1.11 taskset -c 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 /dev/shm/wrk -t16 -c512 -d30s http://192.168.1.230:6666/index.html --latency"
+    "com1" : 'ssh 192.168.1.11 taskset -c 1 /dev/shm/wrk -t1 -c1 -d30s http://192.168.1.230:6666/index.html --latency',
+    "com512" : "ssh 192.168.1.11 taskset -c 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 /dev/shm/wrk -t16 -c512 -d30s http://192.168.1.230:6666/index.html --latency",
+    'com1_1024' : 'ssh 192.168.1.11 taskset -c 1 /dev/shm/wrk -t1 -c1 -d30s -H "Host: example.com \n Host: test.go Host: example.com \n  Host: example.com \n  Host: example.com \n  Host: example.com \n Host: example.com \n Host: example.com Host: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.com Host: example.comHost: example.com Host: example.com \n Host: test.go Host: example.com \n  Host: example.com \n  Host: example.com \n  Host: example.com \n Host: example.com \n Host: example.com Host: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.com Host: example.comHost: " http://192.168.1.230:6666/index.html --latency',
+    'com512_1024' : 'ssh 192.168.1.11 taskset -c 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 /dev/shm/wrk -t16 -c512 -d30s -H "Host: example.com \n Host: test.go Host: example.com \n  Host: example.com \n  Host: example.com \n  Host: example.com \n Host: example.com \n Host: example.com Host: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.com Host: example.comHost: example.com Host: example.com \n Host: test.go Host: example.com \n  Host: example.com \n  Host: example.com \n  Host: example.com \n Host: example.com \n Host: example.com Host: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.comHost: example.com Host: example.comHost: " http://192.168.1.230:6666/index.html --latency'
 }
 
 dvfs_dict = {
@@ -95,11 +97,9 @@ def setDVFS(v):
     FREQ = v
 
 def setITR(v):
-    global ITR
     p1 = Popen(["ssh", SERVER, "ethtool -C enp4s0f1 rx-usecs", v], stdout=PIPE, stderr=PIPE)
-    p1.communicate()    
+    p1.communicate()
     time.sleep(0.5)
-    ITR = int(v)
     
 def runWrk():
     time.sleep(2)
@@ -138,7 +138,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--rapl", help="Rapl power limit [46, 136]")
     parser.add_argument("--dvfs", help="Cpu frequency [1.2, 2.9 GHz]")
-    parser.add_argument("--com", help="com1 == -t1 -c1, com512 == -t16 -c512")
+    parser.add_argument("--com", help="com1 == -t1 -c1, com512 == -t16 -c512, com1_1024 == 1024 bytes")
     parser.add_argument("--itr", help="Static interrupt delay [10, 1000]")
     
     args = parser.parse_args()
@@ -150,6 +150,7 @@ if __name__ == '__main__':
         COM = args.com
     if args.itr:
         setITR(args.itr)
+        ITR=args.itr
         
     init()
     runWrk()
