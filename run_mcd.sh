@@ -6,9 +6,41 @@ export TXQ=${TXQ:='512'}
 export NITERS=${NITERS:='1'}
 export SERVER=${SERVER:=192.168.1.230}
 export OUTFILE=${OUTFILE:=0}
-export MQPS=${MQPS:='200000'}
+export MQPS=${MQPS:='900000'}
+export ITRS=${ITRS:-"50"}
+export MDVFS=${MDVFS:="0xc00"}
+export MRAPL=${MRAPL:-"45"}
+#export MQPS=${MQPS:='200000 400000 600000 800000 900000'}
+#export ITRS=${ITRS:-"50 100 200 300 400"}
+#export MDVFS=${MDVFS:="0x1d00 0x1c00 0x1b00 0x1a00 0x1900 0x1800 0x1700 0x1600 0x1500 0x1400 0x1300 0x1200 0x1100 0x1000 0xf00 0xe00 0xd00 0xc00"}
+#export MRAPL=${MRAPL:-"45 55 65 75 85 95 105 115 125 135"}
+
 currdate=`date +%m_%d_%Y_%H_%M_%S`
 
+function runMutilateBench
+{
+#    for i in `seq 1 1 $NITERS`;
+#    do
+    #cleanAll
+    timeout 600 python3 -u mutilate_bench.py "$@"
+ #   done
+}
+
+function runASPLOS
+{
+    for i in `seq 0 1 $NITERS`; do
+	for qps in ${MQPS}; do
+	    for itr in $ITRS; do
+		for dvfs in ${MDVFS}; do
+		    for r in ${MRAPL}; do
+			echo "runMutilateBench --bench mcd --qps ${qps} --time 30 --itr ${itr} --rapl ${r} --dvfs ${dvfs} --nrepeat ${i}"
+		        runMutilateBench --bench mcd --qps ${qps} --time 30 --itr ${itr} --rapl ${r} --dvfs ${dvfs} --nrepeat ${i}
+		    done
+		done
+	    done
+	done
+    done
+}
 
 function zygos
 {
@@ -258,15 +290,6 @@ function cleanAll
     ssh $SERVER ifup enp4s0f1
     sleep 0.5
 
-}
-
-function runMutilateBench
-{
-    for i in `seq 1 1 $NITERS`;
-    do
-	cleanAll
-	timeout 300 python3 -u mutilate_bench.py "$@"
-    done
 }
 
 function runMQPS

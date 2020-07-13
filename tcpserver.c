@@ -13,39 +13,34 @@
 #define FNAMESIZE 256
 
 union IxgbeLogEntry {
-  long long data[8];
+  long long data[12];
   struct {
     long long tsc;    
     long long ninstructions;
     long long ncycles;
+    long long nref_cycles;
     long long nllc_miss;
     long long joules;
+    long long c3;
+    long long c6;
+    long long c7;
     
     int rx_desc;
     int rx_bytes;
     int tx_desc;
     int tx_bytes;
     
-    long long unused2;
+    long long pad;
   } __attribute((packed)) Fields;
 } __attribute((packed));
 
 #define IXGBE_CACHE_LINE_SIZE 64
-#define IXGBE_LOG_SIZE 800000
+#define IXGBE_LOG_SIZE 2000000
 
 struct IxgbeLog {
-  uint64_t ins_prev;
-  uint64_t cyc_prev;
-  uint64_t llcmiss_prev;
   uint64_t itr_joules_last_tsc;
-  
-  uint32_t msix_other_cnt;
-  uint32_t itr_cookie;
 
-  uint32_t non_itr_cnt;
   uint32_t itr_cnt;
-
-  uint32_t perf_started;
   uint32_t msg_size;
   uint32_t repeat;
   uint32_t dvfs;
@@ -60,7 +55,8 @@ struct IxgbeLog {
   float tput;
   float lat;
   
-  union IxgbeLogEntry log[IXGBE_LOG_SIZE];
+  //union IxgbeLogEntry log[IXGBE_LOG_SIZE];
+  union IxgbeLogEntry *log;
   //char padding[IXGBE_CACHE_LINE_SIZE- sizeof(union LogEntry *)];      
   //union LogEntry *cur;  
 } __attribute__((packed, aligned(IXGBE_CACHE_LINE_SIZE)));
@@ -68,7 +64,7 @@ struct IxgbeLog {
 struct IxgbeLog ixgbe_logs[16];
 
 char *buff;
-uint64_t buff_size = sizeof(ixgbe_logs[1]); // 51200064
+uint64_t buff_size; //= sizeof(ixgbe_logs[1]); // 51200064
   
 // Function designed for chat between client and server. 
 void func(int sockfd) 

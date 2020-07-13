@@ -11,9 +11,9 @@ import numpy as np
 import itertools
 import argparse
 
-MASTER = "192.168.1.230"
-CSERVER = "192.168.1.230"
-CSERVER2 = "10.255.5.8"
+MASTER = "192.168.1.9"
+CSERVER = "192.168.1.11"
+CSERVER2 = "192.168.1.9"
 ITR = 666
 WTHRESH = 0
 PTHRESH = 0
@@ -28,12 +28,14 @@ BSIZEHDR = 0
 RXRING = 0
 TXRING = 0
 RAPL = 135
+DVFS = '0x1d00'
 ITRC = []
 TYPE = 'etc'
 TIME = 120
 SEARCH = 0
 VERBOSE = 0
 TARGET_QPS=100000
+NREPEAT = 0
 
 WORKLOADS = {
     #ETC = 75% GET, 25% SET
@@ -89,25 +91,32 @@ def runRemoteCommands(com, server):
     #print(com)
     p1 = Popen(["ssh", server, com])
 
-def runRemoteCommandGet(server, com):
+def runRemoteCommandGet(com, server):
     #print(com)
     p1 = Popen(["ssh", server, com], stdout=PIPE)
     return p1.communicate()[0].strip()
 
 def setITR(v):
     global ITR
-    p1 = Popen(["ssh", CSERVER2, "ethtool -C enp4s0f1 rx-usecs", v], stdout=PIPE, stderr=PIPE)
+    p1 = Popen(["ssh", CSERVER2, "/app/ethtool-4.5/ethtool -C eth0 rx-usecs", v], stdout=PIPE, stderr=PIPE)
     p1.communicate()    
     time.sleep(0.5)
     ITR = int(v)
 
 def setRAPL(v):
     global RAPL
-    p1 = Popen(["ssh", CSERVER2, "/root/uarch-configure/rapl-read/rapl-power-mod", v], stdout=PIPE, stderr=PIPE)
+    p1 = Popen(["ssh", CSERVER2, "/app/uarch-configure/rapl-read/rapl-power-mod", v], stdout=PIPE, stderr=PIPE)
     p1.communicate()
     time.sleep(0.5)
     RAPL = int(v)
 
+def setDVFS(v):
+    global DVFS
+    p1 = Popen(["ssh", CSERVER2, "wrmsr -a 0x199", v], stdout=PIPE, stderr=PIPE)
+    p1.communicate()
+    time.sleep(0.5)
+    DVFS = v
+    
 def start_counter():
     s = 3
     for i in range(0, 16):
@@ -643,6 +652,63 @@ def runMutilateStatsAll(com):
         print("An error occurred in runMutilateStatsAll ", type(e), e)
         return -1.0, 0, 0, 0, 0, 0, 0, 0, 0
 
+def cleanLogs():
+    for i in range(1, 17):                    
+        runRemoteCommandGet("/app/ethtool-4.5/ethtool -C eth0 DUMP_DYNAMIC_ITR "+str(i), "192.168.1.9")
+        runRemoteCommandGet("dmesg -C", "192.168.1.9")
+        if VERBOSE:
+            print("cleanLogs", i)
+        
+def printLogs():
+    for i in range(1, 17):
+        runRemoteCommandGet("/app/ethtool-4.5/ethtool -C eth0 DUMP_DYNAMIC_ITR "+str(i), "192.168.1.9")
+        runRemoteCommandGet("dmesg -c &> /app/mcd_dmesg."+str(i-1), "192.168.1.9")
+        if VERBOSE:
+            print("printLogs", i)
+
+def getLogs():
+    for i in range(1, 17):
+        runLocalCommandOut("scp -r 192.168.1.9:/app/mcd_dmesg."+str(i-1)+" mcd_dmesg."+str(NREPEAT)+"_"+str(i-1)+"_"+str(ITR)+"_"+str(DVFS)+"_"+str(RAPL)+"_"+str(TARGET_QPS))
+        if VERBOSE:
+            print("getLogs", i)
+    
+def runBenchASPLOS(mqps):
+    runRemoteCommandGet("pkill mutilate", "192.168.1.138")
+    runRemoteCommandGet("pkill mutilate", "192.168.1.131")
+    runRemoteCommandGet("pkill mutilate", "192.168.1.14")
+    runRemoteCommandGet("pkill mutilate", "192.168.1.38")
+    runRemoteCommandGet("pkill mutilate", "192.168.1.37")
+    runRemoteCommandGet("pkill mutilate", "192.168.1.11")
+    time.sleep(1)
+    
+    runRemoteCommands("/app/mutilate/mutilate --agentmode --threads=16", "192.168.1.14")
+    runRemoteCommands("/app/mutilate/mutilate --agentmode --threads=16", "192.168.1.37")
+    runRemoteCommands("/app/mutilate/mutilate --agentmode --threads=16", "192.168.1.38")
+    runRemoteCommands("/app/mutilate/mutilate --agentmode --threads=16", "192.168.1.138")
+    runRemoteCommands("/app/mutilate/mutilate --agentmode --threads=12", "192.168.1.131")
+    time.sleep(5)
+
+    is_running_mcd = runRemoteCommandGet("pgrep memcached", "192.168.1.9")
+    if is_running_mcd:
+        print("already running mcd")
+    else:
+        runRemoteCommands("taskset -c 0-15 /app/memcached/memcached -u nobody -t 16 -m 16G -c 8192 -b 8192 -l 192.168.1.9 -B binary", "192.168.1.9")
+        time.sleep(1)
+        runRemoteCommandGet("taskset -c 0 /app/mutilate/mutilate --binary -s 192.168.1.9 --loadonly -K fb_key -V fb_value", "192.168.1.11")    
+    cleanLogs()
+    time.sleep(1)
+    
+    output = runRemoteCommandGet("taskset -c 0 /app/mutilate/mutilate --binary -s 192.168.1.9 --noload --agent=192.168.1.138,192.168.1.131,192.168.1.14,192.168.1.38,192.168.1.37 --threads=1 "+WORKLOADS[TYPE]+" --depth=4 --measure_depth=1 --connections=16 --measure_connections=32 --measure_qps=2000 --qps="+str(mqps)+" --time="+str(TIME), "192.168.1.11")
+    if VERBOSE:
+        print("Finished executing memcached")
+    f = open("mcd_out."+str(NREPEAT)+"_"+str(ITR)+"_"+str(DVFS)+"_"+str(RAPL)+"_"+str(TARGET_QPS), "w")
+    for line in str(output).strip().split("\\n"):
+        f.write(line.strip()+"\n")
+    f.close()
+    
+    printLogs()
+    getLogs()
+    
 def runBenchQPS(mqps):
     start_counter()
 
@@ -657,7 +723,7 @@ def runBenchQPS(mqps):
     time.sleep(1)
     runRemoteCommands("/root/tmp/zygos_mutilate/mutilate --agentmode --threads=12", "192.168.1.205")
     time.sleep(1)
-
+ 
     #https://elixir.bootlin.com/linux/v4.15/source/arch/x86/events/intel/cstate.c
     runRemoteCommand("perf stat -a -D 4000 -I 1000 -o perf.out -e cycles,instructions,LLC-load-misses,LLC-store-misses,power/energy-pkg/,power/energy-ram/,cstate_core/c3-residency/,cstate_core/c6-residency/,cstate_core/c7-residency/,cstate_pkg/c2-residency/,cstate_pkg/c3-residency/,cstate_pkg/c6-residency/,cstate_pkg/c7-residency/ memcached -u nobody -t 16 -m 16G -c 8192 -b 8192 -l "+MASTER+" -B binary")    
     time.sleep(1)
@@ -854,6 +920,8 @@ if __name__ == '__main__':
     parser.add_argument("--bench", help="Type of benchmark [mcd, zygos]")
     parser.add_argument("--rapl", help="Rapl power limit [35, 135]")
     parser.add_argument("--itr", help="Static interrupt delay [10, 500]")
+    parser.add_argument("--dvfs", help="DVFS value [0xc00 - 0x1d00]")
+    parser.add_argument("--nrepeat", help="repeat value")
     parser.add_argument("--qps", type=int, help="RPS rate")
     parser.add_argument("--time", type=int, help="Time in seconds to run")
     parser.add_argument("--ring", type=int, help="TX and RX ring")
@@ -876,6 +944,10 @@ if __name__ == '__main__':
     if args.qps:
         TARGET_QPS = args.qps
         #print("TARGET_QPS = ", TARGET_QPS)
+    if args.dvfs:
+        setDVFS(args.dvfs)
+    if args.nrepeat:
+        NREPEAT = args.nrepeat
     if args.time:
         TIME = args.time
         #print("TIME = ", TIME)
@@ -901,7 +973,8 @@ if __name__ == '__main__':
         if args.bench == "mcd":
             #print("BENCH = ", args.bench)
             #runBenchQPS(TARGET_QPS)
-            runBenchLocalQPS(TARGET_QPS)
+            #runBenchLocalQPS(TARGET_QPS)
+            runBenchASPLOS(TARGET_QPS)            
         elif args.bench == "test":
             test()
         else:
