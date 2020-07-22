@@ -10,6 +10,7 @@ import getopt
 import numpy as np
 import itertools
 import argparse
+import shutil
 
 MASTER = "192.168.1.9"
 CSERVER = "192.168.1.11"
@@ -96,25 +97,45 @@ def runRemoteCommandGet(com, server):
     p1 = Popen(["ssh", server, com], stdout=PIPE)
     return p1.communicate()[0].strip()
 
-def setITR(v):
+def runLocalCommandGet(com, sin):
+    p1 = Popen(list(filter(None, com.strip().split(' '))), stdout=PIPE, stdin=PIPE)
+    sout = p1.communicate(input=sin.encode())[0]
+    return sout.decode()
+
+def setITR(v, s):    
     global ITR
-    p1 = Popen(["ssh", CSERVER2, "/app/ethtool-4.5/ethtool -C eth0 rx-usecs", v], stdout=PIPE, stderr=PIPE)
-    p1.communicate()    
-    time.sleep(0.5)
+
+    if s == "linux":
+        p1 = Popen(["ssh", CSERVER2, "/app/ethtool-4.5/ethtool -C eth0 rx-usecs", v], stdout=PIPE, stderr=PIPE)
+        p1.communicate()    
+        time.sleep(0.5)
+    else:
+        runLocalCommandGet("socat - TCP4:192.168.1.9:5002", "rx_usecs,"+v)
+    
     ITR = int(v)
 
-def setRAPL(v):
+def setRAPL(v, s):
     global RAPL
-    p1 = Popen(["ssh", CSERVER2, "/app/uarch-configure/rapl-read/rapl-power-mod", v], stdout=PIPE, stderr=PIPE)
-    p1.communicate()
-    time.sleep(0.5)
+
+    if s == "linux":
+        p1 = Popen(["ssh", CSERVER2, "/app/uarch-configure/rapl-read/rapl-power-mod", v], stdout=PIPE, stderr=PIPE)
+        p1.communicate()
+        time.sleep(0.5)
+    else:
+        runLocalCommandGet("socat - TCP4:192.168.1.9:5002", "rapl,"+v)
+        
     RAPL = int(v)
 
-def setDVFS(v):
+def setDVFS(v, s):
     global DVFS
-    p1 = Popen(["ssh", CSERVER2, "wrmsr -a 0x199", v], stdout=PIPE, stderr=PIPE)
-    p1.communicate()
-    time.sleep(0.5)
+
+    if s == "linux":
+        p1 = Popen(["ssh", CSERVER2, "wrmsr -a 0x199", v], stdout=PIPE, stderr=PIPE)
+        p1.communicate()
+        time.sleep(0.5)
+    else:
+        runLocalCommandGet("socat - TCP4:192.168.1.9:5002", "dvfs,"+str(int(v, 0)))
+        
     DVFS = v
     
 def start_counter():
@@ -652,6 +673,61 @@ def runMutilateStatsAll(com):
         print("An error occurred in runMutilateStatsAll ", type(e), e)
         return -1.0, 0, 0, 0, 0, 0, 0, 0, 0
 
+def ebbrtAlive():
+    output = runRemoteCommandGet("ping -c 3 192.168.1.9", "192.168.1.11")
+    if "3 received" in str(output):
+        return True
+    else:
+        return False
+    
+def runBenchEbbRT(mqps):
+    #if not ebbrtAlive():
+    #    print("ebbrtAlive == False, exiting ...")
+    #    return
+
+    runRemoteCommandGet("pkill mutilate", "192.168.1.138")
+    runRemoteCommandGet("pkill mutilate", "192.168.1.131")
+    runRemoteCommandGet("pkill mutilate", "192.168.1.14")
+    runRemoteCommandGet("pkill mutilate", "192.168.1.38")
+    runRemoteCommandGet("pkill mutilate", "192.168.1.37")
+    runRemoteCommandGet("pkill mutilate", "192.168.1.11")
+    time.sleep(1)
+    print("pkill mutilate done")
+    
+    runRemoteCommands("/app/mutilate/mutilate --agentmode --threads=16", "192.168.1.14")
+    runRemoteCommands("/app/mutilate/mutilate --agentmode --threads=16", "192.168.1.37")
+    runRemoteCommands("/app/mutilate/mutilate --agentmode --threads=16", "192.168.1.38")
+    runRemoteCommands("/app/mutilate/mutilate --agentmode --threads=16", "192.168.1.138")
+    runRemoteCommands("/app/mutilate/mutilate --agentmode --threads=12", "192.168.1.131")
+    time.sleep(5)    
+    print("mutilate agentmode done")
+    
+    #for i in range(0, 4):
+    #    runRemoteCommandGet("taskset -c 0 /app/mutilate/mutilate --binary -s 192.168.1.9 --loadonly -K fb_key -V fb_value", "192.168.1.11")
+    #    time.sleep(1)
+    #print("preload done")
+
+    localout = runLocalCommandGet("socat - TCP4:192.168.1.9:5002", "clear,0")
+    localout = runLocalCommandGet("socat - TCP4:192.168.1.9:5002", "start,0")
+    
+    output = runRemoteCommandGet("taskset -c 0 /app/mutilate/mutilate --binary -s 192.168.1.9 --noload --agent=192.168.1.138,192.168.1.131,192.168.1.14,192.168.1.38,192.168.1.37 --threads=1 "+WORKLOADS[TYPE]+" --depth=4 --measure_depth=1 --connections=16 --measure_connections=32 --measure_qps=2000 --qps="+str(mqps)+" --time="+str(TIME), "192.168.1.11")
+    localout = runLocalCommandGet("socat - TCP4:192.168.1.9:5002", "stop,0")
+    
+    f = open("ebbrt_out."+str(NREPEAT)+"_"+str(int(ITR)*2)+"_"+DVFS+"_"+str(RAPL)+"_"+str(TARGET_QPS), "w")
+    for line in str(output).strip().split("\\n"):
+        f.write(line.strip()+"\n")
+    f.close()
+    
+    #ocalout = runLocalCommandGet("socat - TCP4:192.168.1.9:5002", "rdtsc,0")
+    # = open("ebbrt_rdtsc."+str(NREPEAT)+"_"+str(ITR)+"_"+DVFS+"_"+str(RAPL)+"_"+str(TARGET_QPS), "w")
+    #or line in str(localout).strip().split("\\n"):
+    #   f.write(line.strip()+"\n")
+    #.close()
+
+    
+    #rint(localout)
+    
+    
 def cleanLogs():
     for i in range(1, 17):                    
         runRemoteCommandGet("/app/ethtool-4.5/ethtool -C eth0 DUMP_DYNAMIC_ITR "+str(i), "192.168.1.9")
@@ -669,8 +745,10 @@ def printLogs():
 def getLogs():
     for i in range(1, 17):
         runLocalCommandOut("scp -r 192.168.1.9:/app/mcd_dmesg."+str(i-1)+" mcd_dmesg."+str(NREPEAT)+"_"+str(i-1)+"_"+str(ITR)+"_"+str(DVFS)+"_"+str(RAPL)+"_"+str(TARGET_QPS))
+        runLocalCommandOut("gzip -f9 mcd_dmesg."+str(NREPEAT)+"_"+str(i-1)+"_"+str(ITR)+"_"+str(DVFS)+"_"+str(RAPL)+"_"+str(TARGET_QPS))
         if VERBOSE:
             print("getLogs", i)
+    runLocalCommandOut("scp -r 192.168.1.9:/tmp/mcd.rdtsc mcd_rdtsc."+str(NREPEAT)+"_"+str(i-1)+"_"+str(ITR)+"_"+str(DVFS)+"_"+str(RAPL)+"_"+str(TARGET_QPS))
     
 def runBenchASPLOS(mqps):
     runRemoteCommandGet("pkill mutilate", "192.168.1.138")
@@ -699,8 +777,11 @@ def runBenchASPLOS(mqps):
     time.sleep(1)
     
     output = runRemoteCommandGet("taskset -c 0 /app/mutilate/mutilate --binary -s 192.168.1.9 --noload --agent=192.168.1.138,192.168.1.131,192.168.1.14,192.168.1.38,192.168.1.37 --threads=1 "+WORKLOADS[TYPE]+" --depth=4 --measure_depth=1 --connections=16 --measure_connections=32 --measure_qps=2000 --qps="+str(mqps)+" --time="+str(TIME), "192.168.1.11")
+    runRemoteCommands("killall -USR2 memcached", "192.168.1.9")
+    
     if VERBOSE:
         print("Finished executing memcached")
+        
     f = open("mcd_out."+str(NREPEAT)+"_"+str(ITR)+"_"+str(DVFS)+"_"+str(RAPL)+"_"+str(TARGET_QPS), "w")
     for line in str(output).strip().split("\\n"):
         f.write(line.strip()+"\n")
@@ -917,6 +998,7 @@ def test():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument("--os", help="linux or ebbrt")
     parser.add_argument("--bench", help="Type of benchmark [mcd, zygos]")
     parser.add_argument("--rapl", help="Rapl power limit [35, 135]")
     parser.add_argument("--itr", help="Static interrupt delay [10, 500]")
@@ -937,15 +1019,15 @@ if __name__ == '__main__':
     rb = 1
     if args.rapl:
         #print("RAPL = ", args.rapl)
-        setRAPL(args.rapl)
+        setRAPL(args.rapl, args.os)
     if args.itr:
         #print("ITR = ", args.itr)
-        setITR(args.itr)
+        setITR(args.itr, args.os)
     if args.qps:
         TARGET_QPS = args.qps
         #print("TARGET_QPS = ", TARGET_QPS)
     if args.dvfs:
-        setDVFS(args.dvfs)
+        setDVFS(args.dvfs, args.os)
     if args.nrepeat:
         NREPEAT = args.nrepeat
     if args.time:
@@ -971,10 +1053,10 @@ if __name__ == '__main__':
 
     if rb:
         if args.bench == "mcd":
-            #print("BENCH = ", args.bench)
-            #runBenchQPS(TARGET_QPS)
-            #runBenchLocalQPS(TARGET_QPS)
-            runBenchASPLOS(TARGET_QPS)            
+            if args.os == "ebbrt":
+                runBenchEbbRT(TARGET_QPS)
+            else:
+                runBenchASPLOS(TARGET_QPS)
         elif args.bench == "test":
             test()
         else:
