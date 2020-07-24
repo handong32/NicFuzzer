@@ -23,16 +23,21 @@ union IxgbeLogEntry {
   } __attribute((packed)) Fields;
 } __attribute((packed));
 
-int main() {
+int main(int argc, char **argv) {
   /* declare a file pointer */
   FILE    *infile;
   char    *buffer;
   long    numbytes;
   union IxgbeLogEntry *le;
   int i, num_entries;
+
+  if(argc != 2) {
+    printf("usecase: ./parse_ebbrt_mcd FILENAME\n");
+    return 0;
+  }
   
   /* open an existing file for reading */
-  infile = fopen("nc0.out", "r");
+  infile = fopen(argv[1], "r");
  
   /* quit if the file does not exist */
   if(infile == NULL)
